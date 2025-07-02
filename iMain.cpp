@@ -10,6 +10,7 @@ int obstacleY[NUM_OBSTACLES];
 int collisionSoundChannel = -1;
 Image endImage;
 bool endSoundPlayed = false;
+//check
 
 int playerHealth = 3;
 bool hitCooldown = false;
