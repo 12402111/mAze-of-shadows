@@ -2,13 +2,14 @@
 #include "iGraphics.h"
 #include "iSound.h"
 Image fire, fire1, log1, tree, tree1_png;
-Image nameEntryImage;Image navBg; 
+Image nameEntryImage;
+Image navBg;
 Image highScoreBg;
-// global at top
 
-#define NUM_OBSTACLES 30 // Adjust based on worldWidth
+#define NUM_OBSTACLES 30 
 int playerScore = 0;
-typedef struct {
+typedef struct
+{
     char name[100];
     int score;
 } HighScore;
@@ -17,25 +18,20 @@ typedef struct {
 HighScore highScores[MAX_HIGH_SCORES];
 int numHighScores = 0;
 
-
-
-
 char playerName[100] = "";
 bool enteringName = false;
 int nameCharIndex = 0;
-
 
 int obstacleX[NUM_OBSTACLES];
 int obstacleY[NUM_OBSTACLES];
 int collisionSoundChannel = -1;
 Image endImage;
 bool endSoundPlayed = false;
-//check
 
 int playerHealth = 3;
 bool hitCooldown = false;
 int hitCooldownTimer = 0;
-const int HIT_COOLDOWN_LIMIT = 30; // frames to wait before next hit allowed
+const int HIT_COOLDOWN_LIMIT = 30; 
 
 int screenWidth = 1000, screenHeight = 600;
 Image bg1;
@@ -85,7 +81,7 @@ bool isthrowingstar = false;
 bool starthrowdirection = false;
 int throwingFrame = 0;
 typedef struct
-{ // Golem 
+{ // Golem
     int x, y;
     int speed;
     bool active = true;
@@ -100,7 +96,6 @@ bool golemLeft = false;
 Golem golems[MAX_GOLEMS];
 int numGolems = 0;
 
-
 Image settingsmenu, soundon, soundoff, songon;
 Image songoff;
 Image knob;
@@ -109,12 +104,10 @@ int soundknobx = 643;
 int soundknoby = 333;
 int songknobx = 643;
 int songknoby = 245;
-int soundvolume = 50,songvolume = 50;
+int soundvolume = 50, songvolume = 50;
 int bgsongchannel = -1;
-int lastSongVolume = -1; 
-bool wasSongOn = false;  
-
-
+int lastSongVolume = -1;
+bool wasSongOn = false;
 
 bool sound = true, song = true;
 
@@ -124,28 +117,24 @@ int worldWidth = worldScreenCount * screenWidth, worldX = 0;
 bool isJumping = false;
 int jumpSpeed = 20, gravity = -2, verticalSpeed = 0;
 
-
-
 bool isPlayButtonClicked = false;
 void drawRoad()
 {
     int roadHeight = 50;
-    iSetColor(60, 60, 60); // dark gray road color
+    iSetColor(60, 60, 60);
     iFilledRectangle(0, 0, screenWidth, roadHeight);
 }
-
 
 void load_Images()
 {
 
-    // Load and resize obstacles
-   iLoadImage(&nameEntryImage, "saves/assets/images/namescreen.jpg"); //name
-iResizeImage(&nameEntryImage, 900, 600); // 
-   iLoadImage(&leafImg, "saves/assets/images/leaf.png");
-iResizeImage(&leafImg, 20, 20);
+    iLoadImage(&nameEntryImage, "saves/assets/images/namescreen.jpg"); 
+    iResizeImage(&nameEntryImage, 900, 600);                           
+    iLoadImage(&leafImg, "saves/assets/images/leaf.png");
+    iResizeImage(&leafImg, 20, 20);
 
-iLoadImage(&highScoreBg, "saves/assets/images/highscore.jpg"); 
-iResizeImage(&highScoreBg, 1000, 600);
+    iLoadImage(&highScoreBg, "saves/assets/images/highscore.jpg");
+    iResizeImage(&highScoreBg, 1000, 600);
 
     iLoadImage(&fire1, "saves/assets/images/obstacles/fire1.png");
     iResizeImage(&fire1, 80, 80);
@@ -156,9 +145,8 @@ iResizeImage(&highScoreBg, 1000, 600);
     iLoadImage(&tree1_png, "saves/assets/images/obstacles/tree1.png");
     iResizeImage(&tree1_png, 80, 80);
 
-iLoadImage(&navBg, "saves/assets/images/ninja.png");
-iResizeImage(&navBg, 1000, 600); 
-
+    iLoadImage(&navBg, "saves/assets/images/ninja.png");
+    iResizeImage(&navBg, 1000, 600);
 
     iLoadImage(&bg1, "saves/assets/images/start.png");
     iResizeImage(&bg1, 1000, 600);
@@ -166,8 +154,8 @@ iResizeImage(&navBg, 1000, 600);
     iLoadImage(&throwingStar, "saves/assets/images/starthrowing.png");
     iResizeImage(&throwingStar, 20, 20);
 
-   iLoadImage(&settingsmenu, "saves/assets/images/settingBg.png");
-   iResizeImage(&settingsmenu, 1000, 600);
+    iLoadImage(&settingsmenu, "saves/assets/images/settingBg.png");
+    iResizeImage(&settingsmenu, 1000, 600);
 
     iLoadImage(&soundon, "saves/assets/images/SoundOn.png");
     iResizeImage(&soundon, 80, 80);
@@ -175,16 +163,16 @@ iResizeImage(&navBg, 1000, 600);
     iLoadImage(&soundoff, "saves/assets/images/SoundOff.png");
     iResizeImage(&soundoff, 80, 80);
 
-   iLoadImage(&songon, "saves/assets/images/starthrowing.png");
-  iResizeImage(&songon, 65, 65);
+    iLoadImage(&songon, "saves/assets/images/starthrowing.png");
+    iResizeImage(&songon, 65, 65);
 
     iLoadImage(&songoff, "saves/assets/images/SongOff.png");
     iResizeImage(&songoff, 65, 65);
 
     iLoadImage(&knob, "saves/assets/images/starthrowing.png");
     iResizeImage(&knob, 14, 14);
-iLoadImage(&endImage, "saves/assets/images/end.png");
-iResizeImage(&endImage, 1000, 600); // Adjust size if needed
+    iLoadImage(&endImage, "saves/assets/images/end.png");
+    iResizeImage(&endImage, 1000, 600);
 
     iLoadImage(&bg, "saves/assets/images/backimg2.png");
     iResizeImage(&bg, 1000, 600);
@@ -201,7 +189,6 @@ iResizeImage(&endImage, 1000, 600); // Adjust size if needed
     iResizeSprite(&starthrow, playerWidth, playerHeight);
     iSetSpritePosition(&starthrow, playerX, playerY);
 
-
     iLoadFramesFromFolder(golemImage, "saves/assets/images/sprites/Golem_2/RunThrowing");
     iInitSprite(&golemSprite, -1);
     iChangeSpriteFrames(&golemSprite, golemImage, 12);
@@ -215,8 +202,8 @@ void generateObstacles()
 
     for (int i = 0; i < NUM_OBSTACLES; ++i)
     {
-        obstacleX[i] = 300 + i * spacing; // distributed over the world
-        obstacleY[i] = 30; // ground height
+        obstacleX[i] = 300 + i * spacing; 
+        obstacleY[i] = 30;                
     }
 }
 
@@ -251,7 +238,7 @@ void drawHealthBar()
 
     iSetColor(255, 255, 255);
     iRectangle(barX, barY, barWidth, barHeight);
-     char scoreText[20];
+    char scoreText[20];
     sprintf(scoreText, "Score: %d", playerScore);
     iSetColor(255, 255, 0); // Yellow
     iText(barX, barY - 25, scoreText, GLUT_BITMAP_HELVETICA_18);
@@ -426,46 +413,53 @@ void animategolem()
     iAnimateSprite(&golemSprite);
 }
 
-
-
-
-
-void loadHighScores() {
+void loadHighScores()
+{
     FILE *file = fopen("saves/data/scores.txt", "r");
-    if (file == NULL) return; // No scores yet
+    if (file == NULL)
+        return;
 
     numHighScores = 0;
-    while (fscanf(file, "%[^,],%d\n", highScores[numHighScores].name, &highScores[numHighScores].score) == 2) {
+    while (fscanf(file, "%[^,],%d\n", highScores[numHighScores].name, &highScores[numHighScores].score) == 2)
+    {
         numHighScores++;
-        if (numHighScores >= MAX_HIGH_SCORES) break;
+        if (numHighScores >= MAX_HIGH_SCORES)
+            break;
     }
     fclose(file);
 }
-void saveHighScores() {
+void saveHighScores()
+{
     FILE *file = fopen("saves/data/scores.txt", "w");
-    if (file == NULL) return;
+    if (file == NULL)
+        return;
 
-    for (int i = 0; i < numHighScores; i++) {
+    for (int i = 0; i < numHighScores; i++)
+    {
         fprintf(file, "%s,%d\n", highScores[i].name, highScores[i].score);
     }
     fclose(file);
 }
-void insertScore(char *name, int score) {
+void insertScore(char *name, int score)
+{
     // Insert into sorted position
-    for (int i = 0; i <= numHighScores; i++) {
-        if (i == numHighScores || score > highScores[i].score) {
-            for (int j = MAX_HIGH_SCORES - 1; j > i; j--) {
+    for (int i = 0; i <= numHighScores; i++)
+    {
+        if (i == numHighScores || score > highScores[i].score)
+        {
+            for (int j = MAX_HIGH_SCORES - 1; j > i; j--)
+            {
                 highScores[j] = highScores[j - 1];
             }
             strncpy(highScores[i].name, name, sizeof(highScores[i].name));
             highScores[i].score = score;
-            if (numHighScores < MAX_HIGH_SCORES) numHighScores++;
+            if (numHighScores < MAX_HIGH_SCORES)
+                numHighScores++;
             break;
         }
     }
     saveHighScores();
 }
-
 
 void iPlayButton()
 {
@@ -486,15 +480,14 @@ void drawNavigationBar()
     int navItemCount = 5;
 
     iShowLoadedImage(0, 0, &navBg);
-    for (int i = 0; i < navItemCount; i++) {
+    for (int i = 0; i < navItemCount; i++)
+    {
         int x = screenWidth - buttonWidth - 50;
         int y = screenHeight - 110 - (i + 1) * buttonHeight - i * 60;
 
-        // Set plain ash color for button background
-        iSetColor(180, 180, 180); // ash color
+        iSetColor(180, 180, 180);
         iFilledRectangle(x, y, buttonWidth, buttonHeight);
 
-        // Set dark gray for button text for contrast
         iSetColor(60, 60, 60);
         iText(x + buttonWidth / 2 - 20, y + buttonHeight / 2 - 5, navItems[i], GLUT_BITMAP_HELVETICA_18);
     }
@@ -503,13 +496,15 @@ bool mouseNavigationBar(int mx, int my)
 {
     int navItemCount = 5;
     int x = screenWidth - buttonWidth - 50;
-    for (int i = 0; i < navItemCount; i++) {
+    for (int i = 0; i < navItemCount; i++)
+    {
         int y = screenHeight - 110 - (i + 1) * buttonHeight - i * 60;
         if (mx >= x && mx <= x + buttonWidth &&
-            my >= y && my <= y + buttonHeight) {
-            currentScreen = i + 1; // 1=Start, 2=About, 3=Settings, 4=Help, 5=High Scores
-            // If you want High Scores to be 6, add a check:
-            if (i == 4) currentScreen = 6;
+            my >= y && my <= y + buttonHeight)
+        {
+            currentScreen = i + 1; 
+            if (i == 4)
+                currentScreen = 6;
             return true;
         }
     }
@@ -541,7 +536,8 @@ void drawSprite()
     {
         iAnimateSprite(&playerSprite);
     }
-}*/void animatePlayer()
+}*/
+void animatePlayer()
 {
     if ((movingRight || movingLeft) && !isthrowingstar)
     {
@@ -591,8 +587,6 @@ void playBGSong()
         }
     }
 }
-
-
 
 void drawstar()
 {
@@ -646,14 +640,13 @@ void start()
 {
     iClear();
     drawBackground();
-   // drawRoad(); // ✅ draw road first
+    // drawRoad();
     drawSprite();
-    drawObstacles(); // ✅ make sure this is added
+    drawObstacles(); 
     drawstar();
-    drawgolem(); // 
+    drawgolem(); 
     drawHealthBar();
     drawLeaves();
-
 }
 
 void updatePlayer()
@@ -695,37 +688,37 @@ void updatePlayer()
         verticalSpeed += gravity;
     }
     // Check for collision only when not jumping
-if (!isJumping && !hitCooldown)
-{
-    for (int i = 0; i < NUM_OBSTACLES; i++)
+    if (!isJumping && !hitCooldown)
     {
-        int drawX = obstacleX[i] - worldX;
-        int obsWidth = 80, obsHeight = 80;
-
-        if (playerX < drawX + obsWidth &&
-            playerX + playerWidth > drawX &&
-            playerY < obstacleY[i] + obsHeight &&
-            playerY + playerHeight > obstacleY[i])
+        for (int i = 0; i < NUM_OBSTACLES; i++)
         {
-            if (sound)
+            int drawX = obstacleX[i] - worldX;
+            int obsWidth = 80, obsHeight = 80;
+
+            if (playerX < drawX + obsWidth &&
+                playerX + playerWidth > drawX &&
+                playerY < obstacleY[i] + obsHeight &&
+                playerY + playerHeight > obstacleY[i])
             {
-                iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
+                if (sound)
+                {
+                    iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
+                }
+
+                playerHealth--;
+                hitCooldown = true;
+
+                if (playerHealth <= 0)
+                {
+                    // Trigger Game Over logic here if needed
+                    playerHealth = 0;
+                    currentScreen = 5; // maybe game over screen?
+                }
+
+                break;
             }
-
-            playerHealth--;
-            hitCooldown = true;
-
-            if (playerHealth <= 0)
-            {
-                // Trigger Game Over logic here if needed
-                playerHealth = 0;
-                currentScreen = 5; // maybe game over screen?
-            }
-
-            break;
         }
     }
-}
 
     if (playerY <= 50)
     {
@@ -736,16 +729,16 @@ if (!isJumping && !hitCooldown)
 }
 void soundVolume()
 {
-    
-        iSetColor(255, 255, 255);
-        iFilledRectangle(368, soundknoby, soundknobx - 368 + 7, 14);
-        iShowLoadedImage(soundknobx, soundknoby, &knob);
+
+    iSetColor(255, 255, 255);
+    iFilledRectangle(368, soundknoby, soundknobx - 368 + 7, 14);
+    iShowLoadedImage(soundknobx, soundknoby, &knob);
 }
 void songVolume()
 {
-        iSetColor(255, 255, 255);
-        iFilledRectangle(368, songknoby, songknobx - 368 + 7, 14);
-        iShowLoadedImage(songknobx, songknoby, &knob);
+    iSetColor(255, 255, 255);
+    iFilledRectangle(368, songknoby, songknobx - 368 + 7, 14);
+    iShowLoadedImage(songknobx, songknoby, &knob);
 }
 void settings()
 {
@@ -794,7 +787,6 @@ void mouseSettings(int mx, int my)
     }
 }
 
-
 void about()
 {
     iClear();
@@ -809,19 +801,17 @@ void help()
     iText(screenWidth / 2 - 100, screenHeight / 2, "Help Screen", GLUT_BITMAP_HELVETICA_18);
 }
 
-
 void iDraw()
 {
     iClear();
     if (enteringName)
     {
-        iClear(); // ✅ First clear screen
+        iClear(); 
         iShowLoadedImage(0, 0, &nameEntryImage);
         iSetColor(255, 255, 255);
-        // Make "Enter Your Name:" text larger
         iText(300, 350, "Enter Your Name:", GLUT_BITMAP_TIMES_ROMAN_24);
-iText(500, 350, playerName, GLUT_BITMAP_HELVETICA_18);
-        return; // ✅ Prevent rest of iDraw() from running
+        iText(500, 350, playerName, GLUT_BITMAP_HELVETICA_18);
+        return; 
     }
 
     if (!isPlayButtonClicked)
@@ -829,17 +819,17 @@ iText(500, 350, playerName, GLUT_BITMAP_HELVETICA_18);
         iShowLoadedImage(0, 0, &bg1);
         iPlayButton();
     }
-else if (isPlayButtonClicked)
-{
+    else if (isPlayButtonClicked)
+    {
 
-    if (currentScreen == 0)
-    {
-        drawNavigationBar();
-    }
-    else if (currentScreen == 1)
-    {
-        start();
-    }
+        if (currentScreen == 0)
+        {
+            drawNavigationBar();
+        }
+        else if (currentScreen == 1)
+        {
+            start();
+        }
         else if (currentScreen == 2)
         {
             about();
@@ -852,65 +842,62 @@ else if (isPlayButtonClicked)
         {
             help();
         }
-       
 
-       else if (currentScreen == 5)
-{
-    if (!endSoundPlayed)
-    {
-        insertScore(playerName, playerScore);
-        iPlaySound("saves/assets/sounds/gameover.wav", 0, soundvolume);
-        endSoundPlayed = true;
-        loadHighScores();
+        else if (currentScreen == 5)
+        {
+            if (!endSoundPlayed)
+            {
+                insertScore(playerName, playerScore);
+                iPlaySound("saves/assets/sounds/gameover.wav", 0, soundvolume);
+                endSoundPlayed = true;
+                loadHighScores();
+            }
+
+            iShowLoadedImage(0, 0, &endImage);
+
+            char scoreText[100];
+            sprintf(scoreText, "Your Score: %d", playerScore);
+            iSetColor(200, 0, 0);
+            iText(50, 550, scoreText, GLUT_BITMAP_HELVETICA_18);
+
+            char nameText[100];
+            sprintf(nameText, "Player Name: %s", playerName);
+            iSetColor(200, 0, 0);
+            iText(50, 520, nameText, GLUT_BITMAP_HELVETICA_18);
+
+            iSetColor(180, 0, 0);
+            iText(50, 480, "Press 'R' to Restart", GLUT_BITMAP_HELVETICA_18);
+        }
+
+        else if (currentScreen == 6)
+        {
+            iShowLoadedImage(0, 0, &highScoreBg);
+
+            iSetColor(255, 255, 255);
+            iText(400, 550, "Top 10 High Scores", GLUT_BITMAP_HELVETICA_18);
+
+            for (int i = 0; i < numHighScores; i++)
+            {
+                char entry[150];
+                sprintf(entry, "%d. %s - %d", i + 1, highScores[i].name, highScores[i].score);
+                iText(350, 500 - i * 30, entry, GLUT_BITMAP_HELVETICA_18);
+            }
+        }
     }
 
-    iShowLoadedImage(0, 0, &endImage);
-
-    char scoreText[100];
-    sprintf(scoreText, "Your Score: %d", playerScore);
-    iSetColor(200, 0, 0); // Deep red
-    iText(50, 550, scoreText, GLUT_BITMAP_HELVETICA_18);
-
-    char nameText[100];
-    sprintf(nameText, "Player Name: %s", playerName);
-    iSetColor(200, 0, 0); // Deep red
-    iText(50, 520, nameText, GLUT_BITMAP_HELVETICA_18);
-
-    iSetColor(180, 0, 0); // Deep red
-    iText(50, 480, "Press 'R' to Restart", GLUT_BITMAP_HELVETICA_18);
-}
-
-else if (currentScreen == 6) {
-    iShowLoadedImage(0, 0, &highScoreBg); // draw background first
-
-    iSetColor(255, 255, 255);
-    iText(400, 550, "Top 10 High Scores", GLUT_BITMAP_HELVETICA_18);
-
-    for (int i = 0; i < numHighScores; i++) {
-        char entry[150];
-        sprintf(entry, "%d. %s - %d", i + 1, highScores[i].name, highScores[i].score);
-        iText(350, 500 - i * 30, entry, GLUT_BITMAP_HELVETICA_18);
-    }
-}
-
-
-    }
- 
     // Optional: if no movement keys pressed, reset moveTimer to avoid animation stuck
     if (!movingRight && !movingLeft)
     {
         moveTimer = 0;
     }
-   
-
-}void resetGame() {
-    // Stop the end sound if it's playing
-    if (endSoundPlayed) {
+}
+void resetGame()
+{
+    if (endSoundPlayed)
+    {
         iStopSound(collisionSoundChannel);
         iStopSound(bgsongchannel);
     }
-
-    // Reset game state
     playerHealth = 3;
     playerScore = 0;
     playerX = 500;
@@ -922,23 +909,8 @@ else if (currentScreen == 6) {
     hitCooldownTimer = 0;
     endSoundPlayed = false;
     currentScreen = 1;
-
-    // Reset golems
     generateGolems();
 }
-/*void resetGame() {
-    playerHealth = 3;          // Reset health
-    playerScore = 0;           // Reset score
-    playerX = 500;             // Reset player position
-    playerY = 50;
-    worldX = 0;                // Reset camera/scroll
-    isJumping = false;         // Reset jumping state
-    verticalSpeed = 0;
-    hitCooldown = false;       // Reset hit cooldown
-    hitCooldownTimer = 0;
-    endSoundPlayed = false;    // Allow game-over sound to replay
-    currentScreen = 1;         // Return to game screen (or 0 for main menu)
-}*/
 
 /*
 function iMouseMove() is called when the user moves the mouse.
@@ -953,11 +925,8 @@ void iMouseMove(int mx, int my)
 function iMouseDrag() is called when the user presses and drags the mouse.
 (mx, my) is the position where the mouse pointer is.
 */
-void iMouseDrag(int mx, int my)
-{
-    if (currentScreen == 3)
-    {
-        if (mx >= soundknobx && mx <= soundknobx + 14 && my >= soundknoby && my <= soundknoby + 14)
+void SoundSongSettings(int mx, int my){
+    if (mx >= soundknobx && mx <= soundknobx + 14 && my >= soundknoby && my <= soundknoby + 14)
         {
             soundknobclicked = true;
             songknobclicked = false;
@@ -984,6 +953,13 @@ void iMouseDrag(int mx, int my)
             soundknobclicked = false;
             songknobclicked = false;
         }
+
+}
+void iMouseDrag(int mx, int my)
+{
+    if (currentScreen == 3)
+    {
+       SoundSongSettings(mx,my); 
     }
 }
 
@@ -1000,20 +976,12 @@ void iMouse(int button, int state, int mx, int my)
             int centerX = (screenWidth / 4) * 3;
             int centerY = (screenHeight / 4);
             int radius = 40;
-            // Check if inside the play button circle
+           
             int dx = mx - centerX;
             int dy = my - centerY;
             if (dx * dx + dy * dy <= radius * radius)
             {
                 isPlayButtonClicked = true;
-                enteringName = true; // Show name entry screen
-                nameCharIndex = 0;
-                playerName[0] = '\0';
-                if (sound)
-                {
-                    iStopSound(-1);
-                    iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
-                }
             }
         }
         else if (isPlayButtonClicked && currentScreen == 0)
@@ -1230,11 +1198,17 @@ void SpecialKeyboardUP()
         moving = false;
     }
 }*/
-
-
-
-void iTimer()
+void initLeaves()
 {
+    for (int i = 0; i < MAX_LEAVES; i++)
+    {
+        leaves[i].x = rand() % screenWidth;
+        leaves[i].y = rand() % screenHeight + screenHeight;
+        leaves[i].speed = rand() % 3 + 1;
+        leaves[i].active = true;
+    }
+}
+void hitCoolDown(){
     if (hitCooldown)
     {
         hitCooldownTimer++;
@@ -1244,20 +1218,25 @@ void iTimer()
             hitCooldownTimer = 0;
         }
     }
-    if (currentScreen == 1 && playerHealth > 0) // only increase in game screen
-{
-    playerScore++;
+
+}
+void playerScores(){
+    if (currentScreen == 1 && playerHealth > 0)
+    {
+        playerScore++;
+    }
 }
 
-updateLeaves();
-
+void iTimer()
+{
+    updateLeaves();
     updatePlayer();
     updatestar();
-     updateGolems();
+    updateGolems();
     checkStarGolemCollision();
     checkGolemCollision();
     playBGSong();
-    SpecialKeyboardUP(); // No need, we fixed key release handling
+    SpecialKeyboardUP(); 
 }
 
 int main(int argc, char *argv[])
@@ -1268,21 +1247,9 @@ int main(int argc, char *argv[])
     generateObstacles();
     generateGolems();
     loadHighScores();
-
- 
-
-//  Initialize leaves here
-    for (int i = 0; i < MAX_LEAVES; i++)
-    {
-        leaves[i].x = rand() % screenWidth;
-        leaves[i].y = rand() % screenHeight + screenHeight;
-        leaves[i].speed = rand() % 3 + 1;
-        leaves[i].active = true;
-    }
-
-
-
-      iSetTimer(100, updateGolems);
+    initLeaves();
+    iSetTimer(30,playerScores);
+    iSetTimer(100, updateGolems);
     iSetTimer(120, animategolem);
     iSetTimer(120, animatePlayer);
     iSetTimer(60, animatestarthrow);
