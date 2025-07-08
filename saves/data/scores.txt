@@ -1,8 +1,12 @@
 niloy,4004
 humm,2042
+<<<<<<< HEAD
 jh,1261
 gty7t,1125
 Hello2,578
 hherhe,491
+jdhwudhuhd,454
 hufhfdu,453
+=======
+>>>>>>> 94c2b57aaf06204618a581ea8bdbe7e84a3e0dfa
 humm,343
