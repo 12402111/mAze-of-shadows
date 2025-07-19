@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 scdfrr,6028
 AAAAA,4898
 ASDF,2309
@@ -8,3 +9,9 @@ aaaaa,1744
 NIOLO,1713
 Imtiaz,1050
 A,1031
+=======
+niloy,8960
+niloy,2133
+niloy,1810
+nioy,1304
+>>>>>>> 56a1f11 (Save local changes before pulling)

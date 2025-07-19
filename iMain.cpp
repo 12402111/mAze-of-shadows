@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #include <math.h>
 #include "iGraphics.h"
 #include "iSound.h"
@@ -1487,3 +1488,5 @@ int main(int argc, char *argv[])
     iInitialize(screenWidth, screenHeight, "Maze of Shadows");
     return 0;
 }
+=======
+>>>>>>> 56a1f11 (Save local changes before pulling)
