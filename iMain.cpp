@@ -1445,7 +1445,7 @@ void iDraw()
             start();
             if (!levelTimerRunning)
     {
-        levelTimerSeconds = 180;
+        levelTimerSeconds = 100;
         levelTimerRunning = true;
         bossTriggered = false;
     }
@@ -1491,7 +1491,7 @@ void resetGame()
         iStopSound(collisionSoundChannel);
         iStopSound(bgsongchannel);
     }
-    playerHealth = 3;
+    playerHealth = 5;
     playerScore = 0;
     playerX = 500;
     playerY = 50;
