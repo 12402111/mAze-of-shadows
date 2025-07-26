@@ -29,12 +29,18 @@ int buttonWidth = 150;
 int buttonHeight = 52;
 int currentScreen = 0;
 int playerX = 500, playerY = 50, playerWidth = 55, playerHeight = 100;
+int levelTimerSeconds = 10; // 3 minutes
+bool levelTimerRunning = false;
+bool bossTriggered = false;
 
 Image fire, fire1, log1, tree, tree1_png;
 Image nameEntryImage;
 Image navBg;
 Image highScoreBg;
 Image heartImg;
+Image log1_switched;
+Image fire1_switched;
+Image tree1_switched;
 
 int playerScore = 0;
 typedef struct
@@ -65,12 +71,15 @@ int gameOverSoundChannel = -1;
 Image endImage;
 bool endSoundPlayed = false;
 
-int playerHealth = 15;
+int playerHealth = 25;
 bool hitCooldown = false;
 int hitCooldownTimer = 0;
 const int HIT_COOLDOWN_LIMIT = 30; // frames to wait before next hit allowed
 
 Image bg1;
+bool worldSwitched = false;
+int scrollSpeed = 10; // default speed
+Image bg2;            // second world background
 typedef struct
 {
     int x, y;
@@ -82,7 +91,7 @@ Leaf leaves[MAX_LEAVES];
 Image leafImg;
 
 Image bg;
-Image runRight[18];
+FrameSet runRight;
 Sprite playerSprite;
 bool moving = false;
 bool movingRight = false;
@@ -101,9 +110,9 @@ typedef struct
 
 Star stars[MAX_STARS];
 Sprite throwingStarsprite[MAX_STARS];
-Image throwingStar;
+FrameSet throwingStar;
 int starSpeed = 15;
-Image starthrowing[6];
+FrameSet starthrowing;
 int starthrowframecount = 5;
 Sprite starthrow;
 bool isthrowingstar = false;
@@ -119,7 +128,7 @@ typedef struct
     int health;
 } Golem;
 Sprite golemSprite[MAX_GOLEMS];
-Image golemImage[12];
+FrameSet golemImage;
 bool golemRight = true;
 bool golemLeft = false;
 
@@ -136,7 +145,7 @@ typedef struct
 } Barbarian;
 
 Sprite barbarianSprite;
-Image barbarianImage[12];
+FrameSet barbarianImage;
 
 bool barbarianRight = true;
 bool barbarianLeft = false;
@@ -146,8 +155,10 @@ int numBarbarians = 0;
 
 // Dragon....................................
 
-Image dragonFly[DRAGON_FLY_FRAMES];
-Image dragonFire[DRAGON_FIRE_FRAMES];
+// Image dragonFly[DRAGON_FLY_FRAMES];
+// Image dragonFire[DRAGON_FIRE_FRAMES];
+FrameSet dragonFly;
+FrameSet dragonFire;
 Sprite dragonSprite;
 bool dragonIsFiring = false;
 
@@ -182,7 +193,7 @@ Platform platforms[MAX_PLATFORMS];
 int numPlatforms = 10;
 bool onPlatform = false;
 bool onLand = true;
-Image PlatfromImage[MAX_PLATFORMS];
+Image PlatfromImage[3];
 
 //.................................Platform
 
@@ -224,10 +235,24 @@ void load_Images()
     iResizeImage(&fire1, 80, 80);
 
     iLoadImage(&log1, "saves/assets/images/obstacles/log1.png");
+
     iResizeImage(&log1, 80, 80);
+
+    iLoadImage(&tree1_png, "saves/assets/images/obstacles/obs2.png");
+
+    iResizeImage(&tree1_png, 100, 80);
 
     iLoadImage(&tree1_png, "saves/assets/images/obstacles/tree1.png");
     iResizeImage(&tree1_png, 80, 80);
+
+    iLoadImage(&log1_switched, "saves/assets/images/obstacles/ship.png");
+    iResizeImage(&log1_switched, 120, 100);
+
+    iLoadImage(&tree1_switched, "saves/assets/images/obstacles/dead_tree.png");
+    iResizeImage(&tree1_switched, 120, 100);
+
+    iLoadImage(&fire1_switched, "saves/assets/images/obstacles/lava.png");
+    iResizeImage(&fire1_switched, 120, 100);
 
     iLoadImage(&navBg, "saves/assets/images/ninja.png");
     iResizeImage(&navBg, 1000, 600);
@@ -236,14 +261,14 @@ void load_Images()
     iResizeImage(&bg1, 1000, 600);
 
     iLoadImage(&heartImg, "saves/assets/images/heart.png");
-    iResizeImage(&heartImg, 30, 30);
+    iResizeImage(&heartImg, 25, 25);
 
-    iLoadImage(&throwingStar, "saves/assets/images/sprites/star/starthrowing.png");
+    iLoadFramesFromFolder(&throwingStar, "saves/assets/images/sprites/star/");
     for (int i = 0; i < MAX_STARS; i++)
     {
         stars[i].active = false;
         iInitSprite(&throwingStarsprite[i]);
-        iChangeSpriteFrames(&throwingStarsprite[i], &throwingStar, 1);
+        iChangeSpriteFrames(&throwingStarsprite[i], &throwingStar);
         iResizeSprite(&throwingStarsprite[i], 20, 20);
     }
 
@@ -271,35 +296,38 @@ void load_Images()
     iLoadImage(&bg, "saves/assets/images/backimg2.png");
     iResizeImage(&bg, 1000, 600);
 
-    iLoadFramesFromFolder(runRight, "saves/assets/images/sprites/ninjas");
+    iLoadImage(&bg2, "saves/assets/images/backimg4.png"); // Use another background image
+    iResizeImage(&bg2, 1000, 600);
+
+    iLoadFramesFromFolder(&runRight, "saves/assets/images/sprites/ninjas");
     iInitSprite(&playerSprite);
-    iChangeSpriteFrames(&playerSprite, runRight, runFrameCount);
+    iChangeSpriteFrames(&playerSprite, &runRight);
     iResizeSprite(&playerSprite, playerWidth, playerHeight);
     iSetSpritePosition(&playerSprite, playerX, playerY);
 
-    iLoadFramesFromFolder(starthrowing, "saves/assets/images/sprites/starthrowing");
+    iLoadFramesFromFolder(&starthrowing, "saves/assets/images/sprites/starthrowing");
     iInitSprite(&starthrow);
-    iChangeSpriteFrames(&starthrow, starthrowing, starthrowframecount);
+    iChangeSpriteFrames(&starthrow, &starthrowing);
     iResizeSprite(&starthrow, playerWidth, playerHeight);
     iSetSpritePosition(&starthrow, playerX, playerY);
 
-    iLoadFramesFromFolder(golemImage, "saves/assets/images/sprites/Golem_2/RunThrowing");
+    iLoadFramesFromFolder(&golemImage, "saves/assets/images/sprites/Golem_2/RunThrowing");
     for (int i = 0; i < MAX_GOLEMS; i++)
     {
         iInitSprite(&golemSprite[i]);
-        iChangeSpriteFrames(&golemSprite[i], golemImage, 12);
+        iChangeSpriteFrames(&golemSprite[i], &golemImage);
         iResizeSprite(&golemSprite[i], playerWidth, playerHeight);
     }
 
-    iLoadFramesFromFolder(barbarianImage, "saves/assets/images/sprites/barbarians/RunThrowing2");
+    iLoadFramesFromFolder(&barbarianImage, "saves/assets/images/sprites/barbarians/RunThrowing2");
     iInitSprite(&barbarianSprite);
-    iChangeSpriteFrames(&barbarianSprite, barbarianImage, 12);
+    iChangeSpriteFrames(&barbarianSprite, &barbarianImage);
     iResizeSprite(&barbarianSprite, playerWidth, playerHeight);
 
-    iLoadFramesFromFolder(dragonFly, "saves/assets/images/sprites/Dragonflying");
-    iLoadFramesFromFolder(dragonFire, "saves/assets/images/sprites/Dragonfiresplit");
+    iLoadFramesFromFolder(&dragonFly, "saves/assets/images/sprites/Dragonflying");
+    iLoadFramesFromFolder(&dragonFire, "saves/assets/images/sprites/Dragonfiresplit");
     iInitSprite(&dragonSprite);
-    iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+    iChangeSpriteFrames(&dragonSprite, &dragonFly);
     iResizeSprite(&dragonSprite, 250, 200);
 }
 
@@ -324,31 +352,49 @@ void drawObstacles()
             continue;
 
         int type = i % 3;
-        if (type == 0)
-            iShowLoadedImage(drawX, obstacleY[i], &log1);
-        else if (type == 1)
-            iShowLoadedImage(drawX, obstacleY[i], &tree1_png);
+
+        if (!worldSwitched)
+        {
+            if (type == 0)
+                iShowLoadedImage(drawX, obstacleY[i], &log1);
+            else if (type == 1)
+                iShowLoadedImage(drawX, obstacleY[i], &tree1_png);
+            else
+                iShowLoadedImage(drawX, obstacleY[i], &fire1);
+        }
         else
-            iShowLoadedImage(drawX, obstacleY[i], &fire1);
+        {
+            if (type == 0)
+                iShowLoadedImage(drawX, obstacleY[i], &log1_switched);
+            else if (type == 1)
+                iShowLoadedImage(drawX, obstacleY[i], &tree1_switched);
+            else
+                iShowLoadedImage(drawX, obstacleY[i], &fire1_switched);
+        }
     }
 }
 void drawHealthBar()
 {
-    int barWidth = 150, barHeight = 20;
-    int barX = 20, barY = screenHeight - 40;
+    int heartX = 20;
+    int heartY = screenHeight - 50;
 
-    iSetColor(255, 0, 0);
-    iFilledRectangle(barX, barY, barWidth, barHeight);
+    for (int i = 0; i < playerHealth; i++)
+    {
+        iShowLoadedImage(heartX + i * 3, heartY, &heartImg); // spacing = 35
+    }
 
-    iSetColor(0, 255, 0);
-    iFilledRectangle(barX, barY, barWidth * playerHealth / 3, barHeight);
-
-    iSetColor(255, 255, 255);
-    iRectangle(barX, barY, barWidth, barHeight);
+    // Score text
     char scoreText[20];
     sprintf(scoreText, "Score: %d", playerScore);
     iSetColor(255, 255, 0);
-    iText(barX, barY - 25, scoreText, GLUT_BITMAP_HELVETICA_18);
+    iText(20, heartY - 25, scoreText, GLUT_BITMAP_HELVETICA_18);
+
+    char countdownText[20];
+    int minutes = levelTimerSeconds / 60;
+    int seconds = levelTimerSeconds % 60;
+    sprintf(countdownText, "Time Left: %02d:%02d", minutes, seconds);
+    iSetColor(255, 100, 100);
+    iText(800, screenHeight - 30, countdownText, GLUT_BITMAP_HELVETICA_18);
 }
 void updateLeaves()
 {
@@ -430,7 +476,7 @@ void generateGolems()
         golems[numGolems].speed = 4;
         golems[numGolems].health = 1;
         golems[numGolems].active = true;
-        printf("Golem[%d]: x = %d\n", numGolems, golems[numGolems].x);
+        // printf("Golem[%d]: x = %d\n", numGolems, golems[numGolems].x);
 
         numGolems++;
     }
@@ -476,7 +522,7 @@ void drawgolem()
             iSetSpritePosition(&golemSprite[i], gx, golems[i].y);
             iShowSprite(&golemSprite[i]);
         }
-        printf("Golem %d screenX: %d (worldX: %d)\n", i, gx, worldX);
+        // printf("Golem %d screenX: %d (worldX: %d)\n", i, gx, worldX);
     }
 }
 
@@ -739,7 +785,7 @@ void initDragon()
     dragon.fireDuration = 50;
     dragonIsFiring = false;
     dragon.speed = 5;
-    iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+    iChangeSpriteFrames(&dragonSprite, &dragonFly);
 }
 
 void drawDragon()
@@ -830,7 +876,7 @@ void updateDragonAttack()
 
         if (!dragonIsFiring)
         {
-            iChangeSpriteFrames(&dragonSprite, dragonFire, DRAGON_FIRE_FRAMES);
+            iChangeSpriteFrames(&dragonSprite, &dragonFire);
             dragonIsFiring = true;
         }
 
@@ -842,7 +888,7 @@ void updateDragonAttack()
 
             if (dragonIsFiring)
             {
-                iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+                iChangeSpriteFrames(&dragonSprite, &dragonFly);
                 dragonIsFiring = false;
             }
         }
@@ -1036,7 +1082,10 @@ bool mouseNavigationBar(int mx, int my)
 
 void drawBackground()
 {
-    iShowLoadedImage(0, 0, &bg);
+    if (worldSwitched)
+        iShowLoadedImage(0, 0, &bg2);
+    else
+        iShowLoadedImage(0, 0, &bg);
 }
 
 void drawSprite()
@@ -1108,7 +1157,7 @@ void initPlatforms()
     for (int i = 0; i < 10; i++)
     {
         int gap = 400 + rand() % 300;
-        int y = 150 + rand() % 61;
+        int y = 130 + rand() % 61;
         int width = 120 + rand() % 50;
         platforms[i] = (Platform){currentX, y, width, 20, true};
         currentX += gap;
@@ -1127,6 +1176,7 @@ void initPlatforms()
             iLoadImage(&PlatfromImage[i], "saves/assets/images/Platform3.png");
             iResizeImage(&PlatfromImage[i], platforms[i].width + 10, 50);
         }
+        // printf("%d %d %d",)
     }
 }
 
@@ -1218,7 +1268,7 @@ void updatePlayer()
         bool landing = playerY > platforms[i].y + 10 && playerY + verticalSpeed <= platforms[i].y + 15;
         bool standingOn = (playerY == platforms[i].y + 10);
 
-        if (platforms[i].active && alignedHorizontally && ((falling && landing) || standingOn))
+        if (platforms[i].active && alignedHorizontally && ((falling && landing) || standingOn)) // Changed || ---> &&
         {
             playerY = platforms[i].y + 10;
             verticalSpeed = 0;
@@ -1226,6 +1276,7 @@ void updatePlayer()
             onPlatform = true;
             onLand = true;
             break;
+            printf("platform: %d\n", i);
         }
         else if (!alignedHorizontally && standingOn)
         {
@@ -1351,7 +1402,7 @@ void about()
 {
     iClear();
     iSetColor(255, 255, 255);
-    iText(screenWidth / 2 - 100, screenHeight / 2, "About Screen", GLUT_BITMAP_HELVETICA_18);
+    iText(screenWidth / 2 - 100, screenHeight / 2, "A small 2d game developed by Imtiaz and Niloy.", GLUT_BITMAP_HELVETICA_18);
 }
 
 void help()
@@ -1665,6 +1716,19 @@ void iKeyPress(unsigned char key)
         }
         return;
     }
+    if (key == 's' || key == 'S')
+    {
+        worldSwitched = !worldSwitched; // Toggle world
+
+        if (worldSwitched)
+        {
+            scrollSpeed = 12; // Increase speed in new world
+        }
+        else
+        {
+            scrollSpeed = 10; // Default speed
+        }
+    }
 
     if (key == 'b' || key == 'B')
     {
@@ -1705,7 +1769,7 @@ GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
 GLUT_KEY_F7, GLUT_KEY_F8, GLUT_KEY_F9, GLUT_KEY_F10, GLUT_KEY_F11,
 GLUT_KEY_F12, GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN,
 GLUT_KEY_PAGE_UP, GLUT_KEY_PAGE_DOWN, GLUT_KEY_HOME, GLUT_KEY_END,
-GLUT_KEY_INSERT 
+GLUT_KEY_INSERT
 */
 
 void iSpecialKeyPress(unsigned char key)
@@ -1803,7 +1867,7 @@ void playerScores()
     }
 }
 
-void iTimer()
+void iTimer1()
 {
     updatestar();
     updateLeaves();
@@ -1822,7 +1886,15 @@ void iTimer()
     checkStarDragonCollision();
     checkPlayerDragonCollision();
     playBGSong();
-    // SpecialKeyboardUP();
+    
+}
+void iTimer2()
+{
+    spawnBarbarianIfNeeded();
+    animateBarbarian();
+    animateDragon();
+    animatePlayer();
+ 
 }
 
 int main(int argc, char *argv[])
@@ -1839,12 +1911,13 @@ int main(int argc, char *argv[])
     iSetTimer(30, playerScores);
     iSetTimer(100, updateGolems);
     iSetTimer(80, animategolem);
-    iSetTimer(120, animatePlayer);
+    //iSetTimer(120, animatePlayer);
     iSetTimer(60, animatestarthrow);
-    iSetTimer(20, iTimer);
-    iSetTimer(120, spawnBarbarianIfNeeded);
-    iSetTimer(120, animateBarbarian);
-    iSetTimer(120, animateDragon);
+    iSetTimer(16, iTimer1);
+    // iSetTimer(120, spawnBarbarianIfNeeded);
+    //iSetTimer(120, animateBarbarian);
+    //iSetTimer(120, animateDragon);
+    iSetTimer(120,iTimer2);
     iInitializeSound();
     playBGSong();
     iInitialize(screenWidth, screenHeight, "Maze of Shadows");
