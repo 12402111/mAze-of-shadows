@@ -190,7 +190,7 @@ typedef struct
 } Platform;
 
 Platform platforms[MAX_PLATFORMS];
-int numPlatforms = 10;
+int numPlatforms = MAX_PLATFORMS;
 bool onPlatform = false;
 bool onLand = true;
 Image PlatfromImage[3];
@@ -1265,12 +1265,12 @@ void updatePlayer()
         int px = platforms[i].x - worldX;
         bool alignedHorizontally = playerX + playerWidth - 15 > px && playerX + 15 < px + platforms[i].width;
         bool falling = verticalSpeed < 0;
-        bool landing = playerY > platforms[i].y + 10 && playerY + verticalSpeed <= platforms[i].y + 15;
-        bool standingOn = (playerY == platforms[i].y + 10);
+        bool landing = playerY+10 > platforms[i].y + 10 && playerY +10 + verticalSpeed <= platforms[i].y + 15;
+        bool standingOn = ((playerY  <= platforms[i].y + 10)&&(playerY >= platforms[i].y ));
 
         if (platforms[i].active && alignedHorizontally && ((falling && landing) || standingOn)) // Changed || ---> &&
         {
-            playerY = platforms[i].y + 10;
+            playerY  = platforms[i].y + 10;
             verticalSpeed = 0;
             isJumping = false;
             onPlatform = true;

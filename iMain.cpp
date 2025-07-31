@@ -1,22 +1,45 @@
 #include <math.h>
 #include "iGraphics.h"
 #include "iSound.h"
-
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
+int count = 0;
 int screenWidth = 1000, screenHeight = 600;
-int worldScreenCount = 5;
+int worldScreenCount = 30;
 int worldWidth = worldScreenCount * screenWidth, worldX = 0;
 bool isJumping = false;
 int jumpSpeed = 25, gravity = -2, verticalSpeed = 0;
 bool isPlayButtonClicked = false;
+bool allDragonsDefeated = false;
+bool victoryTriggered = false;
+int victoryTimer = 0;
+const int VICTORY_DISPLAY_TIME = 120; // 3 seconds at 60fps
+Image helpim, aboutim;
+struct Heart
+{
+    int x, y;
+    bool active;
+};
 
+Heart heart;
+// int heartImage;
+int heartFallSpeed = 3; // adjust for desired falling speed
 Image heartImg;
+bool heartonfloor = false;
+int heartSpawnTimer = 0;
+int heartSpawnInterval = 20 * 60; // 20 seconds (60 frames per second)
+
+// Add these constants for better boundary management
+#define WORLD_LEFT_BOUNDARY 0
+#define WORLD_RIGHT_BOUNDARY (worldWidth - screenWidth)
+int difficulty = 1; // FIXED: Set default to medium (1), not 0
 
 int navY = 490;
 int buttonWidth = 150;
 int buttonHeight = 52;
 int currentScreen = 0;
 
-int levelTimerSeconds = 10; // 3 minutes
+int levelTimerSeconds = 180; // 3 minutes
 bool levelTimerRunning = false;
 bool bossTriggered = false;
 
@@ -30,7 +53,7 @@ Image nameEntryImage;
 Image navBg;
 Image highScoreBg;
 
-#define NUM_OBSTACLES 30
+#define NUM_OBSTACLES 100
 bool obstaclePassed[NUM_OBSTACLES];
 int playerScore = 0;
 typedef struct
@@ -49,7 +72,7 @@ int nextGolemX = 1000;
 
 int barbarianSpawnTimer = 0;
 const int BARBARIAN_SPAWN_DELAY = 100;
-int nextBarbarianX = nextGolemX + 500;
+int nextBarbarianX = 1500; // FIXED: Initialize properly
 
 char playerName[100] = "";
 bool enteringName = false;
@@ -61,14 +84,14 @@ int collisionSoundChannel = -1;
 Image endImage;
 bool endSoundPlayed = false;
 
-int playerHealth = 5;
+int playerHealth = 10; // FIXED: Initialize to 10 instead of 50
 bool hitCooldown = false;
 int hitCooldownTimer = 0;
 const int HIT_COOLDOWN_LIMIT = 30; // frames to wait before next hit allowed
 
 Image bg1;
 bool worldSwitched = false;
-int scrollSpeed = 10; // default speed
+int scrollSpeed = 7; // default speed
 Image bg2;           // second world background
 
 #define MAX_LEAVES 50
@@ -84,7 +107,7 @@ Leaf leaves[MAX_LEAVES];
 Image leafImg;
 
 Image bg;
-Image runRight[18];
+FrameSet runRight;
 Sprite playerSprite;
 bool moving = false;
 bool movingRight = false;
@@ -97,32 +120,35 @@ const int MOVE_INTERVAL = 10;
 typedef struct
 {
     int x, y;
-    bool active;
+    bool active = false;
+    bool directionRight = true;
+    bool directionLeft = false;
 } Star;
 
 Star stars[MAX_STARS];
-Image throwingStar;
+Sprite throwingStarsprite[MAX_STARS];
+FrameSet throwingStar;
 int starSpeed = 15;
-Image starthrowing[6];
+FrameSet starthrowing;
 int starthrowframecount = 5;
 Sprite starthrow;
 bool isthrowingstar = false;
-bool starthrowdirection = false;
+bool starthrowdirection = true; // FIXED: Initialize to true (facing right)
 int throwingFrame = 0;
 
 typedef struct
 { // Golem
     int x, y;
     int speed;
-    bool active = true;
+    bool active;
     int health;
 } Golem;
 Sprite golemSprite;
-Image golemImage[12];
+FrameSet golemImage;
 bool golemRight = true;
 bool golemLeft = false;
 #define GOLEM_SPAWN_INTERVAL 850
-#define MAX_GOLEMS 20
+#define MAX_GOLEMS 30
 Golem golems[MAX_GOLEMS];
 int numGolems = 0;
 
@@ -130,35 +156,31 @@ typedef struct
 { // Barbarian
     int x, y;
     int speed;
-    bool active = true;
+    bool active;
     int health;
 } Barbarian;
 
 Sprite barbarianSprite;
-Image barbarianImage[12];
+FrameSet barbarianImage;
 
 bool barbarianRight = true;
 bool barbarianLeft = false;
 
-#define BARBARIAN_SPAWN_INTERVAL 650
-#define MAX_BARBARIANS 10
-#define BARBARIAN_SPAWN_DELAY 150
+#define BARBARIAN_SPAWN_INTERVAL 400
+#define MAX_BARBARIANS 50
+#define BARBARIAN_SPAWN_DELAY 60
 
 Barbarian barbarians[MAX_BARBARIANS];
 int numBarbarians = 0;
 
 #define DRAGON_FLY_FRAMES 6
 #define DRAGON_FIRE_FRAMES 6
-
-// Dragon....................................
-#define DRAGON_FLY_FRAMES 6
-#define DRAGON_FIRE_FRAMES 6
 #define DRAGON_MAX_HEALTH 3
+#define MAX_DRAGONS 20
 
-Image dragonFly[DRAGON_FLY_FRAMES];
-Image dragonFire[DRAGON_FIRE_FRAMES];
+FrameSet dragonFly;
+FrameSet dragonFire;
 Sprite dragonSprite;
-bool dragonIsFiring = false;
 
 typedef struct
 {
@@ -172,10 +194,32 @@ typedef struct
     int speed;
 } Dragon;
 
-Dragon dragon;
-bool DragonFacingRight = true;
-bool DragonFacingLeft = false;
-//....................................Dragon
+Dragon dragons[MAX_DRAGONS];
+int totalDragons = 0;
+int currentDragonIndex = 0;
+
+bool dragonIsFiring = false;
+bool DragonFacingRight = false;
+bool DragonFacingLeft = true;
+int DragonSoundChannel;
+
+// Platform..................................
+#define MAX_PLATFORMS 50
+
+typedef struct
+{
+    int x, y;
+    int width, height;
+    bool active;
+} Platform;
+
+Platform platforms[MAX_PLATFORMS];
+int numPlatforms = 40;
+bool onPlatform = false;
+bool onLand = true;
+Image PlatfromImage[6];
+
+//.................................Platform
 
 Image settingsmenu, soundon, soundoff, songon;
 Image songoff;
@@ -201,47 +245,54 @@ void drawRoad()
 
 void load_Images()
 {
-
     // Load and resize obstacles
-    iLoadImage(&nameEntryImage, "saves/assets/images/namescreen.jpg");
+    iLoadImage(&nameEntryImage, "saves/assets/images/namescreen.png");
     iResizeImage(&nameEntryImage, 1000, 600);
     iLoadImage(&leafImg, "saves/assets/images/leaf.png");
     iResizeImage(&leafImg, 20, 20);
     iLoadImage(&heartImg, "saves/assets/images/heart.png");
     iResizeImage(&heartImg, 30, 30);
 
-    iLoadImage(&highScoreBg, "saves/assets/images/CleanBG.png");
+    iLoadImage(&highScoreBg, "saves/assets/images/highscore.jpg");
     iResizeImage(&highScoreBg, 1000, 600);
-    //iLoadImage(&highObstacle, "saves/assets/images/obstacles/highobs.png");
-    //iResizeImage(&highObstacle, 80, 40); // wider and less tall
 
     iLoadImage(&fire1, "saves/assets/images/obstacles/fire1.png");
-    iResizeImage(&fire1, 100, 80);
+    iResizeImage(&fire1, 80, 80);
 
     iLoadImage(&log1, "saves/assets/images/obstacles/log1.png");
-    iResizeImage(&log1, 100, 80);
+    iResizeImage(&log1, 80, 80);
 
     iLoadImage(&tree1_png, "saves/assets/images/obstacles/obs2.png");
-
-    iResizeImage(&tree1_png, 100, 80);
+    iResizeImage(&tree1_png, 80, 80);
 
     iLoadImage(&log1_switched, "saves/assets/images/obstacles/ship.png");
-    iResizeImage(&log1_switched, 120, 100);
+    iResizeImage(&log1_switched, 80, 100);
 
     iLoadImage(&tree1_switched, "saves/assets/images/obstacles/dead_tree.png");
-    iResizeImage(&tree1_switched, 120, 100);
+    iResizeImage(&tree1_switched, 80, 100);
 
     iLoadImage(&fire1_switched, "saves/assets/images/obstacles/lava.png");
-    iResizeImage(&fire1_switched, 120, 100);
+    iResizeImage(&fire1_switched, 80, 100);
 
     iLoadImage(&navBg, "saves/assets/images/ninja.png");
     iResizeImage(&navBg, 1000, 600);
 
     iLoadImage(&bg1, "saves/assets/images/MoSpos1.png");
     iResizeImage(&bg1, 1000, 600);
+    iLoadImage(&helpim, "saves/assets/images/Help.png");
+    iResizeImage(&helpim, 1000, 600);
 
-    iLoadImage(&throwingStar, "saves/assets/images/starthrowing.png");
-    iResizeImage(&throwingStar, 20, 20);
+    iLoadImage(&aboutim, "saves/assets/images/About.png");
+    iResizeImage(&aboutim, 1000, 600);
+
+    iLoadFramesFromFolder(&throwingStar, "saves/assets/images/sprites/star");
+    for (int i = 0; i < MAX_STARS; i++)
+    {
+        stars[i].active = false;
+        iInitSprite(&throwingStarsprite[i]);
+        iChangeSpriteFrames(&throwingStarsprite[i], &throwingStar);
+        iResizeSprite(&throwingStarsprite[i], 20, 20);
+    }
 
     iLoadImage(&settingsmenu, "saves/assets/images/settingBg.png");
     iResizeImage(&settingsmenu, 1000, 600);
@@ -266,56 +317,61 @@ void load_Images()
 
     iLoadImage(&bg, "saves/assets/images/backimg2.png");
     iResizeImage(&bg, 1000, 600);
-    iLoadImage(&bg2, "saves/assets/images/backimg4.png"); // Use another background image
-    iResizeImage(&bg2, 1000, 600);
+    iLoadImage(&bg2, "saves/assets/images/backimg4.png");
+    iResizeImage(&bg2, 1020, 600);
 
-    iLoadFramesFromFolder(runRight, "saves/assets/images/sprites/ninjas");
-    iInitSprite(&playerSprite, -1);
-    iChangeSpriteFrames(&playerSprite, runRight, runFrameCount);
+    iLoadFramesFromFolder(&runRight, "saves/assets/images/sprites/ninjas");
+    iInitSprite(&playerSprite);
+    iChangeSpriteFrames(&playerSprite, &runRight);
     iResizeSprite(&playerSprite, playerWidth, playerHeight);
     iSetSpritePosition(&playerSprite, playerX, playerY);
 
-    iLoadFramesFromFolder(starthrowing, "saves/assets/images/sprites/starthrowing");
-    iInitSprite(&starthrow, -1);
-    iChangeSpriteFrames(&starthrow, starthrowing, starthrowframecount);
+    iLoadFramesFromFolder(&starthrowing, "saves/assets/images/sprites/starthrowing");
+    iInitSprite(&starthrow);
+    iChangeSpriteFrames(&starthrow, &starthrowing);
     iResizeSprite(&starthrow, playerWidth, playerHeight);
     iSetSpritePosition(&starthrow, playerX, playerY);
 
-    iLoadFramesFromFolder(golemImage, "saves/assets/images/sprites/Golem_2/RunThrowing");
-    iInitSprite(&golemSprite, -1);
-    iChangeSpriteFrames(&golemSprite, golemImage, 12);
+    iLoadFramesFromFolder(&golemImage, "saves/assets/images/sprites/Golem_2/RunThrowing");
+    iInitSprite(&golemSprite);
+    iChangeSpriteFrames(&golemSprite, &golemImage);
     iResizeSprite(&golemSprite, playerWidth, playerHeight);
 
-    iLoadFramesFromFolder(barbarianImage, "saves/assets/images/sprites/barbarians/RunThrowing2");
-    iInitSprite(&barbarianSprite, -1);
-    iChangeSpriteFrames(&barbarianSprite, barbarianImage, 12);
+    iLoadFramesFromFolder(&barbarianImage, "saves/assets/images/sprites/barbarians/RunThrowing2");
+    iInitSprite(&barbarianSprite);
+    iChangeSpriteFrames(&barbarianSprite, &barbarianImage);
     iResizeSprite(&barbarianSprite, playerWidth, playerHeight);
 
-    iLoadFramesFromFolder(dragonFly, "saves/assets/images/sprites/Dragonflying");
-    iLoadFramesFromFolder(dragonFire, "saves/assets/images/sprites/Dragonfiresplit");
-    iInitSprite(&dragonSprite, -1);
-    iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+    iLoadFramesFromFolder(&dragonFly, "saves/assets/images/sprites/Dragonflying");
+    iLoadFramesFromFolder(&dragonFire, "saves/assets/images/sprites/Dragonfiresplit");
+    iInitSprite(&dragonSprite);
+    iChangeSpriteFrames(&dragonSprite, &dragonFly);
     iResizeSprite(&dragonSprite, 250, 200);
 }
 
+// FIXED: Better obstacle generation
 void generateObstacles()
 {
     int spacing = 350;
+    int startX = 300;
 
     for (int i = 0; i < NUM_OBSTACLES; ++i)
     {
-        obstacleX[i] = 300 + i * spacing;
+        obstacleX[i] = startX + (i * spacing);
         obstacleY[i] = 30;
+        obstaclePassed[i] = false;
     }
 }
 
+// FIXED: Better obstacle culling and rendering
 void drawObstacles()
 {
     for (int i = 0; i < NUM_OBSTACLES; i++)
     {
         int drawX = obstacleX[i] - worldX;
 
-        if (drawX + 80 < 0 || drawX > screenWidth)
+        // Expanded culling bounds to prevent pop-in/pop-out
+        if (drawX + 120 < -50 || drawX > screenWidth + 50)
             continue;
 
         int type = i % 3;
@@ -341,6 +397,75 @@ void drawObstacles()
     }
 }
 
+// FIXED: Platform initialization
+void initPlatforms()
+{
+    int startX = 800;
+    int currentX = startX;
+
+    for (int i = 0; i < numPlatforms; i++)
+    {
+        int gap = 400 + rand() % 200;
+        int y = 120 + rand() % 50;
+        int width = 140 + rand() % 60;
+
+        platforms[i] = (Platform){currentX, y, width, 10, true};
+        currentX += gap;
+    }
+    for (int j = 0; j < 6; j++)
+    {
+        // Load platform images based on world state
+
+        if (j == 0)
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/Platform1.jpg");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+        else if (j == 1)
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/Platform2.png");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+        else if (j == 2)
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/Platform3.png");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+
+        else if (j == 3)
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/platformx1.png");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+        else if (j == 4)
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/platformx2.png");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+        else
+        {
+            iLoadImage(&PlatfromImage[j], "saves/assets/images/platformx3.png");
+            iResizeImage(&PlatfromImage[j], platforms[j].width, 30);
+        }
+    }
+}
+
+void drawPlatforms()
+{
+    for (int i = 0; i < numPlatforms; i++)
+    {
+
+        if (!worldSwitched && platforms[i].active && platforms[i].x - worldX <= 1000)
+        {
+            iShowLoadedImage(platforms[i].x - worldX, platforms[i].y, &PlatfromImage[i % 3]);
+        }
+        else if (worldSwitched && platforms[(i + 3) % numPlatforms].active && platforms[(i + 3) % numPlatforms].x - worldX <= 1000)
+        {
+            iShowLoadedImage(platforms[(i + 3) % numPlatforms].x - worldX, platforms[(i + 3) % numPlatforms].y, &PlatfromImage[(i % 3) + 3]);
+        }
+    }
+}
+
 void drawHealthBar()
 {
     int heartX = 20;
@@ -348,7 +473,7 @@ void drawHealthBar()
 
     for (int i = 0; i < playerHealth; i++)
     {
-        iShowLoadedImage(heartX + i * 35, heartY, &heartImg); // spacing = 35
+        iShowLoadedImage(heartX + i * 35, heartY, &heartImg);
     }
 
     // Score text
@@ -382,6 +507,7 @@ void updateLeaves()
         }
     }
 }
+
 void drawLeaves()
 {
     for (int i = 0; i < MAX_LEAVES; i++)
@@ -392,8 +518,72 @@ void drawLeaves()
         }
     }
 }
+//  1. Spawn heart at random X in world space
+void spawnHeart()
+{
+    if (!heart.active && heartSpawnTimer >= heartSpawnInterval)
+    {
+        //  heart.x = rand() % (worldWidth - 32); // World coordinate, not screen
+        // heart.x = worldX + 300;
+        heart.x = worldX + 400 + rand() % 200; // 400–600 px ahead of camera
+        heart.y = screenHeight + 50;           // Start above screen
+        heart.active = true;
+        heartSpawnTimer = 0; // Reset timer after spawning
+    }
+}
 
-// GolemCode========================================================================================================================
+//  2. Update heart falling & landing
+void updateHeart()
+{
+    if (heart.active && !heartonfloor)
+    {
+        if (heart.y > 45)
+        {
+            heart.y -= heartFallSpeed;
+        }
+        else
+        {
+            heart.y = 45; // Land on ground
+
+            heartonfloor = true; // Stop falling
+        }
+    }
+}
+
+//  3. Draw heart on screen relative to scrolling
+void drawHeart()
+{
+    if (heart.active)
+    {
+        int drawX = heart.x - worldX; // Convert world to screen position
+        iShowLoadedImage(drawX, heart.y, &heartImg);
+    }
+}
+
+//  4. Collision with player (adjust for scrolling!)
+void checkHeartCollision()
+{
+    if (heart.active)
+    {
+        int heartDrawX = heart.x - worldX; // Convert to screen coordinates for collision
+
+        bool collision =
+            heartDrawX < playerX + playerWidth &&
+            heartDrawX + 32 > playerX &&
+            heart.y < playerY + playerHeight &&
+            heart.y + 32 > playerY;
+
+        if (collision)
+        {
+            heart.active = false;
+            heartonfloor = false;
+            playerHealth++;
+
+            // Optional: play pickup sound or animation here
+        }
+    }
+}
+// FIXED: Golem generation
 void generateGolems()
 {
     numGolems = 0;
@@ -409,6 +599,25 @@ void generateGolems()
         golems[numGolems].active = true;
 
         numGolems++;
+    }
+}
+
+// FIXED: Barbarian generation
+void generateBarbarians()
+{
+    numBarbarians = 0;
+    for (int i = BARBARIAN_SPAWN_INTERVAL * 3; i < worldWidth - 200; i += BARBARIAN_SPAWN_INTERVAL)
+    {
+        if (numBarbarians >= MAX_BARBARIANS)
+            break;
+
+        barbarians[numBarbarians].x = i;
+        barbarians[numBarbarians].y = 45;
+        barbarians[numBarbarians].speed = 4;
+        barbarians[numBarbarians].health = 2;
+        barbarians[numBarbarians].active = true;
+
+        numBarbarians++;
     }
 }
 
@@ -438,7 +647,7 @@ void updateGolems()
             continue;
 
         int gx = golems[i].x;
-        int px = playerX + worldX; // playerX is in only screenwidth.(0<=playerx<=screenwidth).So we added worldX.
+        int px = playerX + worldX;
 
         if (gx > px && gx - px <= 250)
         {
@@ -470,17 +679,12 @@ void checkStarGolemCollision()
         if (!stars[i].active)
             continue;
 
-        for (int j = 0; j < 5; j++)
+        for (int j = 0; j < MAX_GOLEMS; j++)
         {
             if (!golems[j].active)
                 continue;
 
-            int gx = golems[j].x - worldX;
-            int gy = golems[j].y;
-            int gWidth = playerWidth;
-            int gHeight = playerHeight;
-
-            if (stars[i].x < gx + gWidth && stars[i].x + 20 > gx && stars[i].y < gy + gHeight && stars[i].y + 20 > gy)
+            if (/*iCheckCollision(&golemSprite[j], &throwingStarsprite[i])*/ iCheckCollision(&golemSprite, &throwingStarsprite[i]))
             {
 
                 golems[j].health--;
@@ -495,6 +699,7 @@ void checkStarGolemCollision()
         }
     }
 }
+
 void checkGolemCollision()
 {
     if (hitCooldown)
@@ -514,6 +719,7 @@ void checkGolemCollision()
         {
             if (sound)
             {
+                iStopSound(-1);
                 iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
             }
 
@@ -535,31 +741,6 @@ void animategolem()
 {
     iAnimateSprite(&golemSprite);
 }
-
-void spawnGolemIfNeeded()
-{
-    if (numGolems >= MAX_GOLEMS)
-        return;
-
-    if (golemSpawnTimer >= GOLEM_SPAWN_DELAY)
-    {
-        golems[numGolems].x = nextGolemX;
-        golems[numGolems].y = 45;
-        golems[numGolems].speed = 2;
-        golems[numGolems].health = 1;
-        golems[numGolems].active = true;
-
-        numGolems++;
-        golemSpawnTimer = 0;
-
-        nextGolemX += 700 + rand() % 300;
-    }
-    else
-    {
-        golemSpawnTimer++;
-    }
-}
-//======================================================================================================================GolemCode
 
 void drawBarbarian()
 {
@@ -611,6 +792,7 @@ void updateBarbarians()
         }
     }
 }
+
 void checkStarBarbarianCollision()
 {
     for (int i = 0; i < MAX_STARS; i++)
@@ -636,12 +818,13 @@ void checkStarBarbarianCollision()
                 if (barbarians[j].health <= 0)
                 {
                     barbarians[j].active = false;
-                    playerScore += 100; // Barbarian marle bonus
+                    playerScore += 100;
                 }
             }
         }
     }
 }
+
 void checkBarbarianCollision()
 {
     if (hitCooldown)
@@ -661,6 +844,7 @@ void checkBarbarianCollision()
         {
             if (sound)
             {
+                iStopSound(-1);
                 iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
             }
 
@@ -683,90 +867,99 @@ void animateBarbarian()
     iAnimateSprite(&barbarianSprite);
 }
 
-void spawnBarbarianIfNeeded()
-{
-    if (numBarbarians >= MAX_BARBARIANS)
-        return;
-
-    if (barbarianSpawnTimer >= BARBARIAN_SPAWN_DELAY)
-    {
-        barbarians[numBarbarians].x = nextBarbarianX;
-        barbarians[numBarbarians].y = 45;
-        barbarians[numBarbarians].speed = 2;
-        barbarians[numBarbarians].health = 1;
-        barbarians[numBarbarians].active = true;
-
-        numBarbarians++;
-        barbarianSpawnTimer = 0;
-
-        nextBarbarianX += 700 + rand() % 300;
-    }
-    else
-    {
-        barbarianSpawnTimer++;
-    }
-}
-
-// DragonCode======================================================================================================================
+// FIXED: Dragon initialization
 void initDragon()
 {
-    dragon.x = 3000;
-    dragon.y = 250;
-    dragon.health = DRAGON_MAX_HEALTH;
-    dragon.active = true;
-    dragon.isSpeaking = true;
-    dragon.isFiring = false;
-    dragon.fireCooldown = 200;
-    dragon.fireDuration = 50;
+    if (difficulty == 0)
+        totalDragons = 3; // Easy
+    else if (difficulty == 1)
+        totalDragons = 5; // Medium
+    else
+        totalDragons = 7; // Hard
+
+    int baseX = 1500;   // FIXED: Place dragons further away
+    int spacing = 1000; // FIXED: Increase spacing between dragons
+
+    for (int i = 0; i < totalDragons; i++)
+    {
+        dragons[i].x = baseX + i * spacing;
+        dragons[i].y = 250;
+        dragons[i].health = DRAGON_MAX_HEALTH;
+        dragons[i].active = true;
+        dragons[i].isSpeaking = true;
+        dragons[i].isFiring = false;
+        dragons[i].fireCooldown = 200;
+        dragons[i].fireDuration = 50;
+        dragons[i].speed = 2;
+    }
+
+    currentDragonIndex = 0;
     dragonIsFiring = false;
-    dragon.speed = 2;
-    iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+    DragonFacingRight = true;
+    DragonFacingLeft = false;
+    iChangeSpriteFrames(&dragonSprite, &dragonFly);
 }
 
 void drawDragon()
 {
-    if (!dragon.active)
+    if (currentDragonIndex >= totalDragons)
         return;
 
-    int dx = dragon.x - worldX;
-    iSetSpritePosition(&dragonSprite, dx, dragon.y);
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active)
+        return;
+
+    int dx = dragon->x - worldX;
+
+    // Only draw if dragon is visible on screen
+    if (dx < -300 || dx > screenWidth + 100)
+        return;
+
+    iSetSpritePosition(&dragonSprite, dx, dragon->y);
     iShowSprite(&dragonSprite);
 
-    if (dragon.isSpeaking && dragon.x - worldX < 800)
+    if (dragon->isSpeaking && dx < 800)
     {
-        iText(dx - 20, dragon.y + 185, "You dare approach me?!!!!", GLUT_BITMAP_TIMES_ROMAN_24);
+        iSetColor(255, 255, 255);
+        iText(dx - 20, dragon->y + 185, "You dare approach me?!!!!", GLUT_BITMAP_TIMES_ROMAN_24);
         static int speechTimer = 200;
         speechTimer--;
         if (speechTimer <= 0)
         {
-            dragon.isSpeaking = false;
+            dragon->isSpeaking = false;
         }
     }
-    int barX = dragon.x - worldX + 25;
-    int barY = dragon.y + 160;
+
+    // Health bar
+    int barX = dx + 25;
+    int barY = dragon->y + 160;
     int barWidth = 100;
     int barHeight = 12;
 
-    float healthRatio = (float)dragon.health / DRAGON_MAX_HEALTH;
+    float healthRatio = (float)dragon->health / DRAGON_MAX_HEALTH;
 
     iSetColor(100, 100, 100);
     iFilledRectangle(barX, barY, barWidth, barHeight);
-
     iSetColor(255, 0, 0);
     iFilledRectangle(barX, barY, barWidth * healthRatio, barHeight);
 }
+
 void updateDragonPosition()
 {
-    if (!dragon.active)
+    if (currentDragonIndex >= totalDragons)
+        return;
+
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active)
         return;
 
     static int hoverTimer = 0;
     hoverTimer++;
-    dragon.y += (hoverTimer % 120 < 60) ? -3 : 3;
+    dragon->y += (hoverTimer % 120 < 60) ? -1 : 1; // FIXED: Smaller hover movement
 
     int px = playerX + worldX;
-    int dx = dragon.x;
-    if (dx > px && dx - px <= 250)
+    int dx = dragon->x;
+    if (dx > px && dx - px <= 300) // FIXED: Larger detection range
     {
         if (DragonFacingRight)
         {
@@ -774,9 +967,9 @@ void updateDragonPosition()
             DragonFacingRight = false;
             DragonFacingLeft = true;
         }
-        dragon.x -= dragon.speed;
+        dragon->x -= dragon->speed;
     }
-    else if (px > dx && px - dx <= 250)
+    else if (px > dx && px - dx <= 300)
     {
         if (DragonFacingLeft)
         {
@@ -784,43 +977,45 @@ void updateDragonPosition()
             DragonFacingLeft = false;
             DragonFacingRight = true;
         }
-        dragon.x += dragon.speed;
-    }
-    else if (px == dx)
-    {
-        dragon.x += 0;
+        dragon->x += dragon->speed;
     }
 }
 
 void updateDragonAttack()
 {
-    if (!dragon.active)
+    if (currentDragonIndex >= totalDragons)
         return;
 
-    if (dragon.fireCooldown > 0)
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active)
+        return;
+
+    if (dragon->fireCooldown > 0)
     {
-        dragon.fireCooldown--;
+        dragon->fireCooldown--;
     }
     else
     {
-        dragon.isFiring = true;
-        dragon.fireDuration--;
+        dragon->isFiring = true;
+        dragon->fireDuration--;
 
         if (!dragonIsFiring)
         {
-            iChangeSpriteFrames(&dragonSprite, dragonFire, DRAGON_FIRE_FRAMES);
+            iChangeSpriteFrames(&dragonSprite, &dragonFire);
             dragonIsFiring = true;
+            iStopSound(-1);
+            DragonSoundChannel = iPlaySound("saves/assets/sounds/dragon.wav", 0, soundvolume);
         }
 
-        if (dragon.fireDuration <= 0)
+        if (dragon->fireDuration <= 0)
         {
-            dragon.isFiring = false;
-            dragon.fireCooldown = 150 + rand() % 100;
-            dragon.fireDuration = 60;
+            dragon->isFiring = false;
+            dragon->fireCooldown = 150 + rand() % 100;
+            dragon->fireDuration = 60;
 
             if (dragonIsFiring)
             {
-                iChangeSpriteFrames(&dragonSprite, dragonFly, DRAGON_FLY_FRAMES);
+                iChangeSpriteFrames(&dragonSprite, &dragonFly);
                 dragonIsFiring = false;
             }
         }
@@ -829,59 +1024,70 @@ void updateDragonAttack()
 
 void checkDragonFireCollision()
 {
-    if (!dragon.active || !dragon.isFiring || hitCooldown)
+    if (currentDragonIndex >= totalDragons)
         return;
 
-    int fx = dragon.x - worldX + 40;
-    int fw = 10 + (60 - dragon.fireDuration) * 2;
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active || !dragon->isFiring || hitCooldown)
+        return;
 
-    if (playerX + playerWidth >= fx && playerX <= fx + fw && playerY <= dragon.y)
+    int fx = dragon->x - worldX + 40;
+    int fw = 10 + (60 - dragon->fireDuration) * 2;
+
+    if (playerX + playerWidth >= fx && playerX <= fx + fw && playerY <= dragon->y)
     {
         playerHealth--;
         hitCooldown = true;
 
         if (sound)
         {
-            iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
+            iStopSound(-1);
+            DragonSoundChannel = iPlaySound("saves/assets/sounds/dragon.wav", 0, soundvolume);
         }
 
         if (playerHealth <= 0)
-        {
             currentScreen = 5;
-        }
     }
 }
+
 void checkPlayerDragonCollision()
 {
-    if (!dragon.active || hitCooldown)
+    if (currentDragonIndex >= totalDragons)
         return;
 
-    int dx = dragon.x - worldX;
-    int dy = dragon.y;
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active || hitCooldown)
+        return;
 
+    int dx = dragon->x - worldX;
+    int dy = dragon->y;
     int dragonWidth = 150;
     int dragonHeight = 100;
 
-    if (playerX + playerWidth > dx && playerX < dx + dragonWidth && playerY + playerHeight > dy && playerY < dy + dragonHeight)
+    if (playerX + playerWidth > dx && playerX < dx + dragonWidth &&
+        playerY + playerHeight > dy && playerY < dy + dragonHeight)
     {
         playerHealth--;
         hitCooldown = true;
 
         if (sound)
         {
-            iPlaySound("saves/assets/sounds/background.wav", 0, soundvolume);
+            iStopSound(-1);
+            DragonSoundChannel = iPlaySound("saves/assets/sounds/dragon.wav", 0, soundvolume);
         }
 
         if (playerHealth <= 0)
-        {
             currentScreen = 5;
-        }
     }
 }
 
 void checkStarDragonCollision()
 {
-    if (!dragon.active)
+    if (currentDragonIndex >= totalDragons)
+        return;
+
+    Dragon *dragon = &dragons[currentDragonIndex];
+    if (!dragon->active)
         return;
 
     for (int i = 0; i < MAX_STARS; i++)
@@ -889,34 +1095,62 @@ void checkStarDragonCollision()
         if (!stars[i].active)
             continue;
 
-        int dx = dragon.x - worldX;
-        if (stars[i].x + 20 > dx && stars[i].x < dx + 150 && stars[i].y + 20 > dragon.y && stars[i].y < dragon.y + 150)
+        int dx = dragon->x - worldX;
+        if (stars[i].x + 20 > dx && stars[i].x < dx + 150 &&
+            stars[i].y + 20 > dragon->y && stars[i].y < dragon->y + 150)
         {
-            dragon.health--;
+            dragon->health--;
             stars[i].active = false;
 
-            if (dragon.health <= 0)
+            if (dragon->health <= 0)
             {
-                dragon.active = false;
-                playerScore += 1000; // Bonus after killing a dragon................
+                dragon->active = false;
+                playerScore += 1000;
+                playerHealth++;
+
+                currentDragonIndex++;
+                dragonIsFiring = false;
+
+                if (currentDragonIndex < totalDragons)
+                {
+                    iChangeSpriteFrames(&dragonSprite, &dragonFly);
+                }
+                else
+                {
+                    // ALL DRAGONS DEFEATED! Victory condition
+                    allDragonsDefeated = true;
+                    victoryTriggered = true;
+                    victoryTimer = VICTORY_DISPLAY_TIME;
+                    levelTimerRunning = false;
+
+                    if (sound)
+                    {
+                        iStopSound(-1);
+                        iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
+                    }
+                }
             }
         }
     }
 }
+
 void animateDragon()
 {
     iAnimateSprite(&dragonSprite);
 }
-//=========================================================================================================================DragonCode
 
+// FIXED: High score functions
 void loadHighScores()
 {
     FILE *file = fopen("saves/data/scores.txt", "r");
     if (file == NULL)
+    {
+        numHighScores = 0;
         return;
+    }
 
     numHighScores = 0;
-    while (fscanf(file, "%[^,],%d\n", highScores[numHighScores].name, &highScores[numHighScores].score) == 2)
+    while (fscanf(file, "%99[^,],%d\n", highScores[numHighScores].name, &highScores[numHighScores].score) == 2)
     {
         numHighScores++;
         if (numHighScores >= MAX_HIGH_SCORES)
@@ -924,6 +1158,7 @@ void loadHighScores()
     }
     fclose(file);
 }
+
 void saveHighScores()
 {
     FILE *file = fopen("saves/data/scores.txt", "w");
@@ -936,30 +1171,42 @@ void saveHighScores()
     }
     fclose(file);
 }
+
 void insertScore(char *name, int score)
 {
-
-    for (int i = 0; i <= numHighScores; i++)
+    // Find insertion point
+    int insertPos = numHighScores;
+    for (int i = 0; i < numHighScores; i++)
     {
-        if (i == numHighScores || score > highScores[i].score)
+        if (score > highScores[i].score)
         {
-            for (int j = MAX_HIGH_SCORES - 1; j > i; j--)
-            {
-                highScores[j] = highScores[j - 1];
-            }
-            strncpy(highScores[i].name, name, sizeof(highScores[i].name));
-            highScores[i].score = score;
-            if (numHighScores < MAX_HIGH_SCORES)
-                numHighScores++;
+            insertPos = i;
             break;
         }
     }
+
+    // Shift scores down
+    for (int i = min(numHighScores, MAX_HIGH_SCORES - 1); i > insertPos; i--)
+    {
+        highScores[i] = highScores[i - 1];
+    }
+
+    // Insert new score
+    if (insertPos < MAX_HIGH_SCORES)
+    {
+        strncpy(highScores[insertPos].name, name, sizeof(highScores[insertPos].name) - 1);
+        highScores[insertPos].name[sizeof(highScores[insertPos].name) - 1] = '\0';
+        highScores[insertPos].score = score;
+
+        if (numHighScores < MAX_HIGH_SCORES)
+            numHighScores++;
+    }
+
     saveHighScores();
 }
 
 void iPlayButton()
 {
-
     iSetTransparentColor(61, 174, 191, 0.6);
     iFilledCircle((screenWidth / 4) * 3, (screenHeight / 4), 44);
 
@@ -1022,12 +1269,25 @@ bool mouseNavigationBar(int mx, int my)
     return false;
 }
 
+// FIXED: Proper background scrolling
 void drawBackground()
 {
     if (worldSwitched)
-        iShowLoadedImage(0, 0, &bg2);
+    {
+        int bgOffset = worldX % screenWidth;
+        iShowLoadedImage(-bgOffset, 0, &bg2);
+        iShowLoadedImage(-bgOffset + screenWidth, 0, &bg2);
+        if (bgOffset > 0)
+            iShowLoadedImage(-bgOffset - screenWidth, 0, &bg2);
+    }
     else
-        iShowLoadedImage(0, 0, &bg);
+    {
+        int bgOffset = worldX % screenWidth;
+        iShowLoadedImage(-bgOffset, 0, &bg);
+        iShowLoadedImage(-bgOffset + screenWidth, 0, &bg);
+        if (bgOffset > 0)
+            iShowLoadedImage(-bgOffset - screenWidth, 0, &bg);
+    }
 }
 
 void drawSprite()
@@ -1037,7 +1297,7 @@ void drawSprite()
         iSetSpritePosition(&starthrow, playerX, playerY);
         iShowSprite(&starthrow);
     }
-    else if (!isthrowingstar)
+    else
     {
         iSetSpritePosition(&playerSprite, playerX, playerY);
         iShowSprite(&playerSprite);
@@ -1051,13 +1311,6 @@ void animatePlayer()
         iAnimateSprite(&playerSprite);
     }
 }
-/*void animatePlayer()
-{
-    if ((movingRight || movingLeft) && !isthrowingstar)
-    {
-        iAnimateSprite(&playerSprite);
-    }
-}*/
 
 void animatestarthrow()
 {
@@ -1066,7 +1319,7 @@ void animatestarthrow()
         iAnimateSprite(&starthrow);
         throwingFrame++;
 
-        if (throwingFrame >= starthrowframecount)
+        if (throwingFrame >= starthrowframecount * 2) // FIXED: Better frame counting
         {
             isthrowingstar = false;
             throwingFrame = 0;
@@ -1110,53 +1363,363 @@ void drawstar()
         {
             if (stars[i].active)
             {
-
-                iShowLoadedImage(stars[i].x, stars[i].y, &throwingStar);
+                iSetSpritePosition(&throwingStarsprite[i], stars[i].x, stars[i].y);
+                iShowSprite(&throwingStarsprite[i]);
+                // iAnimateSprite(&throwingStarsprite[i]);
             }
         }
     }
 }
+
 void updatestar()
 {
     for (int i = 0; i < MAX_STARS; i++)
     {
         if (stars[i].active)
         {
-            if (movingRight)
+            if (stars[i].directionRight)
             {
-                if (starthrowdirection)
-                {
-                    iMirrorImage(&throwingStar, HORIZONTAL);
-                }
                 stars[i].x += starSpeed;
-                if (stars[i].x >= screenWidth || stars[i].x <= 10)
+            }
+            else if (stars[i].directionLeft)
+            {
+                stars[i].x -= starSpeed;
+            }
+
+            if (stars[i].x >= screenWidth - 10 || stars[i].x <= 10)
+            {
+                stars[i].active = false;
+            }
+        }
+    }
+}
+void checkObstacleCollision()
+{
+    // Obstacle Collision
+    // Check for collision with obstacles
+    if (!isJumping && !hitCooldown)
+    {
+        for (int i = 0; i < NUM_OBSTACLES; i++)
+        {
+            int drawX = obstacleX[i] - worldX;
+            int obsWidth = 80, obsHeight = 80;
+
+            if (playerX < drawX + obsWidth &&
+                playerX + playerWidth > drawX &&
+                playerY < obstacleY[i] + obsHeight &&
+                playerY + playerHeight > obstacleY[i])
+            {
+                if (sound)
                 {
-                    stars[i].active = false;
+                    iStopSound(-1);
+                    iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
+                }
+
+                playerHealth--;
+                hitCooldown = true;
+
+                if (playerHealth <= 0)
+                {
+                    playerHealth = 0;
+                    currentScreen = 5;
+                }
+
+                break;
+            }
+        }
+    }
+    int playerWorldX = playerX + worldX;
+    for (int i = 0; i < NUM_OBSTACLES; i++)
+    {
+        int obsRightEdge = obstacleX[i] + 80;
+        if (!obstaclePassed[i] && playerWorldX > obsRightEdge + 10)
+        {
+            playerScore += 50;
+            obstaclePassed[i] = true;
+        }
+    }
+}
+
+// FIXED: Complete rewrite of updatePlayer with proper movement logic
+void updatePlayer()
+{
+    if (isJumping)
+    { // Handle horizontal movement
+        if (movingRight)
+        {
+            if (worldX < WORLD_RIGHT_BOUNDARY)
+            {
+                worldX += scrollSpeed;
+            }
+            else if (playerX < screenWidth - playerWidth - 10)
+            {
+                playerX += scrollSpeed;
+            }
+        }
+        else if (movingLeft)
+        {
+            if (worldX > WORLD_LEFT_BOUNDARY)
+            {
+                worldX -= scrollSpeed;
+            }
+            else if (playerX > 10)
+            {
+                playerX -= scrollSpeed;
+            }
+        }
+        playerY += verticalSpeed;
+        verticalSpeed += gravity;
+    }
+    // Handle vertical movement (jumping/falling)
+    // if (isJumping || playerY > 50)
+    /*{
+        playerY += verticalSpeed;
+        verticalSpeed += gravity;
+    }*/
+
+    // FIXED: Platform collision logic
+    if (difficulty != 0)
+    {
+        bool foundPlatform = false;
+        bool wasOnPlatform = onPlatform;
+        onPlatform = false;
+
+        for (int i = 0; i < numPlatforms; i++)
+        {
+            if (!platforms[i].active)
+                continue;
+
+            int platformX = platforms[i].x - worldX;
+            int platformY = platforms[i].y;
+            int platformWidth = platforms[i].width;
+            int platformHeight = platforms[i].height;
+
+            // Platform top collision (landing/running)
+            bool horizontalOverlap = (playerX + playerWidth - 20 > platformX) &&
+                                     (playerX + 20 < platformX + platformWidth);
+
+            bool playerAbovePlatform = (playerY >= platformY + platformHeight - 5);
+            bool playerNearPlatform = (playerY <= platformY + platformHeight + 15);
+            bool fallingOrStanding = (verticalSpeed <= 0 || (wasOnPlatform && playerY <= platformY + platformHeight + 5));
+
+            if (horizontalOverlap && playerAbovePlatform && playerNearPlatform && fallingOrStanding)
+            {
+                playerY = platformY + platformHeight;
+                verticalSpeed = 0;
+                isJumping = false;
+                onPlatform = true;
+                onLand = true;
+                foundPlatform = true;
+                break;
+            }
+
+            // Platform bottom/side collision
+            bool hitFromBelow = (playerY + playerHeight > platformY) &&
+                                (playerY < platformY + platformHeight) &&
+                                (playerX + playerWidth - 20 > platformX + 5) &&
+                                (playerX - 20 < platformX + platformWidth - 5) &&
+                                (verticalSpeed > 0);
+
+            bool hitFromSide = (playerY + playerHeight - 10 > platformY) &&
+                               (playerY + 10 < platformY + platformHeight) &&
+                               (((playerX + playerWidth - 20 > platformX) && (playerX + playerWidth < platformX + 20) && movingRight) ||
+                                ((playerX + 20 < platformX + platformWidth) && (playerX + 20 > platformX + platformWidth - 20) && movingLeft));
+
+            if (hitFromBelow)
+            {
+                playerY = platformY - playerHeight;
+                verticalSpeed = -5;
+            }
+
+            if (hitFromSide && !foundPlatform)
+            {
+                if (movingRight)
+                {
+                    playerX = platformX - playerWidth;
+                    if (worldX < WORLD_RIGHT_BOUNDARY)
+                        worldX -= scrollSpeed;
+                }
+                else if (movingLeft)
+                {
+                    playerX = platformX + platformWidth;
+                    if (worldX > WORLD_LEFT_BOUNDARY)
+                        worldX += scrollSpeed;
                 }
             }
-            else if (movingLeft)
+        }
+
+        // Edge jumping logic
+        if (!foundPlatform && wasOnPlatform && playerY > 50 && playerY < 250)
+        {
+            for (int i = 0; i < numPlatforms; i++)
             {
-                if (!starthrowdirection)
+                if (!platforms[i].active)
+                    continue;
+
+                int platformX = platforms[i].x - worldX;
+                int platformY = platforms[i].y;
+                int platformWidth = platforms[i].width;
+
+                bool atLeftEdge = (playerX >= platformX - 20) && (playerX <= platformX + 5) &&
+                                  (playerY >= platformY + 15) && (playerY <= platformY + 25);
+                bool atRightEdge = (playerX + playerWidth >= platformX + platformWidth - 5) &&
+                                   (playerX + playerWidth <= platformX + platformWidth + 20) &&
+                                   (playerY >= platformY + 15) && (playerY <= platformY + 25);
+
+                if (atLeftEdge || atRightEdge)
                 {
-                    iMirrorImage(&throwingStar, HORIZONTAL);
+                    onPlatform = true;
+                    onLand = true;
+                    break;
                 }
-                stars[i].x -= starSpeed;
-                if (stars[i].x > screenWidth || stars[i].x <= 10)
+            }
+
+            if (!onPlatform)
+            {
+                onLand = false;
+                if (!isJumping)
                 {
-                    stars[i].active = false;
+                    isJumping = true;
+                    verticalSpeed = -2;
                 }
+            }
+        }
+    }
+
+    // Ground collision
+    if (!onPlatform && playerY <= 50)
+    {
+        playerY = 50;
+        verticalSpeed = 0;
+        isJumping = false;
+        onPlatform = false;
+        onLand = true;
+    }
+}
+void updatePlayerPosition()
+{
+    if (!moving || isJumping)
+        return;
+
+    if (movingRight)
+    {
+        if (worldX < WORLD_RIGHT_BOUNDARY)
+        {
+            worldX += scrollSpeed;
+        }
+        else if (playerX < screenWidth - playerWidth - 10)
+        {
+            playerX += scrollSpeed;
+        }
+    }
+    else if (movingLeft)
+    {
+        if (worldX > WORLD_LEFT_BOUNDARY)
+        {
+            worldX -= scrollSpeed;
+        }
+        else if (playerX > 10)
+        {
+            playerX -= scrollSpeed;
+        }
+    }
+}
+
+void updateLevelCountdown()
+{
+    if (victoryTriggered || allDragonsDefeated)
+        return;
+
+    if (levelTimerRunning && levelTimerSeconds > 0)
+    {
+        levelTimerSeconds--;
+
+        if (levelTimerSeconds == 0 && !bossTriggered)
+        {
+            if (!allDragonsDefeated)
+            {
+                bossTriggered = true;
+                currentScreen = 5;
             }
         }
     }
 }
 
+// FIXED: Reset game function
+void resetGameForNextLevel()
+{
+    currentDragonIndex = 0;
+    allDragonsDefeated = false;
+    bossTriggered = false;
 
+    initDragon();
+
+    levelTimerSeconds = 180;
+    levelTimerRunning = true;
+
+    // Reset enemies
+    numGolems = 0;
+    numBarbarians = 0;
+    generateGolems();
+    generateBarbarians();
+
+    worldX += 2000; // Move forward more
+    playerX = 100;
+
+    if (playerHealth < 10)
+        playerHealth = min(10, playerHealth + 3);
+}
+
+void updateVictoryState()
+{
+    if (victoryTriggered && victoryTimer > 0)
+    {
+        victoryTimer--;
+
+        if (victoryTimer <= 0)
+        {
+            victoryTriggered = false;
+
+            if (difficulty < 2)
+            {
+                difficulty++;
+                resetGameForNextLevel();
+            }
+            else
+            {
+                currentScreen = 7; // Victory screen
+            }
+        }
+    }
+}
+
+void drawVictoryScreen()
+{
+    iClear();
+    iShowLoadedImage(0, 0, &highScoreBg);
+
+    iSetColor(255, 215, 0);
+    iText(screenWidth / 2 - 100, screenHeight / 2 + 50, "VICTORY!", GLUT_BITMAP_TIMES_ROMAN_24);
+
+    iSetColor(255, 255, 255);
+    iText(screenWidth / 2 - 150, screenHeight / 2, "You have conquered all difficulties!", GLUT_BITMAP_HELVETICA_18);
+
+    char finalScore[50];
+    sprintf(finalScore, "Final Score: %d", playerScore);
+    iText(screenWidth / 2 - 50, screenHeight / 2 - 30, finalScore, GLUT_BITMAP_HELVETICA_18);
+
+    iText(screenWidth / 2 - 80, screenHeight / 2 - 60, "Press 'R' to play again", GLUT_BITMAP_HELVETICA_12);
+    iText(screenWidth / 2 - 60, screenHeight / 2 - 80, "Press 'B' for menu", GLUT_BITMAP_HELVETICA_12);
+}
 
 void start()
 {
     iClear();
+    iStopSound(bgsongchannel);
     drawBackground();
-    // drawRoad();
+
+    if (difficulty != 0)
+        drawPlatforms();
 
     drawSprite();
     drawObstacles();
@@ -1166,151 +1729,36 @@ void start()
     drawDragon();
     drawHealthBar();
     drawLeaves();
-    for (int i = 0; i < NUM_OBSTACLES; i++)
+    drawHeart();
+    spawnHeart();
+
+    if (victoryTriggered)
     {
-        obstaclePassed[i] = false;
-    }
+        iSetColor(255, 255, 0);
+        char victoryMsg[100];
+        sprintf(victoryMsg, "ALL DRAGONS DEFEATED! LEVEL COMPLETE!");
+        iText(screenWidth / 2 - 150, screenHeight / 2, victoryMsg, GLUT_BITMAP_HELVETICA_18);
 
-
-
-}
-
-void updatePlayer()
-{
-    //<This part for falling><and this part for jumping>
-    if (playerY > 50 || verticalSpeed > 0)
-    {
-        if (movingRight)
-        {
-            if (worldX < worldWidth - 10)
-            {
-                worldX += scrollSpeed;
-            }
-            if (worldX > 0 && worldX < worldWidth - 1000)
-            {
-                iWrapImage(&bg, -5);
-            }
-            else if ((worldX <= 0 && worldX >= -490) || (worldX >= worldWidth - 1000 && worldX <= worldWidth - 10))
-            {
-                playerX += scrollSpeed;
-            }
-            else
-            {
-                playerX += 0;
-            }
-        }
-        else if (movingLeft)
-        {
-            if (worldX > -490)
-            {
-                worldX -= scrollSpeed;
-            }
-            if (worldX > 0 && worldX < worldWidth - 1000)
-            {
-                iWrapImage(&bg, 5);
-            }
-            else if ((worldX <= 0 && worldX >= -490) || (worldX >= worldWidth - 1000 && worldX <= worldWidth - 10))
-            {
-                playerX -= scrollSpeed;
-            }
-            else
-            {
-                playerX += 0;
-            }
-        }
-        playerY += verticalSpeed;
-        verticalSpeed += gravity;
-    }
-    /*int obsWidth = 80, obsHeight = 80;
-    for (int i = 0; i < NUM_OBSTACLES; i++) {
-        // Check if obstacle has moved past the player
-        if (!obstaclePassed[i] && playerX > obstacleX[i] + obsWidth) {
-            playerScore += 50;
-            obstaclePassed[i] = true;
-        }
-    }*/
-    /*int playerWorldX = playerX + worldX;
-
-    for (int i = 0; i < NUM_OBSTACLES; i++) {
-        int obsRightEdge = obstacleX[i] + 80;
-
-        if (!obstaclePassed[i] && playerWorldX > obsRightEdge + 10) {
-            playerScore += 50;
-            obstaclePassed[i] = true;
-        }
-    }*/
-
-    // Check for collision only when not jumping
-    if (!isJumping && !hitCooldown)
-    {
-        for (int i = 0; i < NUM_OBSTACLES; i++)
-        {
-            int drawX = obstacleX[i] - worldX;
-            int obsWidth = 80, obsHeight = 80;
-            // int playerWorldX = playerX + worldX;
-            if (playerX < drawX + obsWidth &&
-                playerX + playerWidth > drawX &&
-                playerY < obstacleY[i] + obsHeight &&
-                playerY + playerHeight > obstacleY[i])
-            {
-                if (sound)
-                {
-                    iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
-                }
-
-                playerHealth--;
-                hitCooldown = true;
-
-                if (playerHealth <= 0)
-                {
-                    // Trigger Game Over logic here if needed
-                    playerHealth = 0;
-                    currentScreen = 5; // maybe game over screen?
-                }
-
-                break;
-            }
-        }
-    }
-    if (isJumping && !hitCooldown)
-        playerScore += 5;
-
-    if (playerY <= 50)
-    {
-        playerY = 50;
-        isJumping = false;
-        verticalSpeed = 0;
+        iSetColor(255, 255, 255);
+        iText(screenWidth / 2 - 100, screenHeight / 2 - 30, "Advancing to next level...", GLUT_BITMAP_HELVETICA_12);
     }
 }
 
-void updateLevelCountdown()
-{
-    if (levelTimerRunning && levelTimerSeconds > 0)
-    {
-        levelTimerSeconds--;
-
-        if (levelTimerSeconds == 0 && !bossTriggered)
-        {
-            // Time's up! Trigger the boss
-            bossTriggered = true;
-            currentScreen=5;
-            initDragon(); // call your existing dragon spawn/init
-        }
-    }
-}
+// FIXED: Sound and settings functions
 void soundVolume()
 {
-
     iSetColor(255, 255, 255);
     iFilledRectangle(368, soundknoby, soundknobx - 368 + 7, 14);
     iShowLoadedImage(soundknobx, soundknoby, &knob);
 }
+
 void songVolume()
 {
     iSetColor(255, 255, 255);
     iFilledRectangle(368, songknoby, songknobx - 368 + 7, 14);
     iShowLoadedImage(songknobx, songknoby, &knob);
 }
+
 void settings()
 {
     iClear();
@@ -1335,67 +1783,141 @@ void settings()
     {
         iShowLoadedImage(277, 217, &songoff);
     }
+
+    // Difficulty Buttons
+    iSetColor(255, 255, 255);
+
+    // Easy Button
+    if (difficulty == 0)
+        iSetColor(0, 255, 0);
+    else
+        iSetColor(200, 200, 200);
+    iFilledRectangle(280, 140, 100, 40);
+    iSetColor(0, 0, 0);
+    iText(310, 155, "Easy", GLUT_BITMAP_HELVETICA_18);
+
+    // Medium Button
+    if (difficulty == 1)
+        iSetColor(255, 255, 0);
+    else
+        iSetColor(200, 200, 200);
+    iFilledRectangle(400, 140, 100, 40);
+    iSetColor(0, 0, 0);
+    iText(420, 155, "Medium", GLUT_BITMAP_HELVETICA_18);
+
+    // Hard Button
+    if (difficulty == 2)
+        iSetColor(255, 0, 0);
+    else
+        iSetColor(200, 200, 200);
+    iFilledRectangle(520, 140, 100, 40);
+    iSetColor(0, 0, 0);
+    iText(545, 155, "Hard", GLUT_BITMAP_HELVETICA_18);
 }
 
 void mouseSettings(int mx, int my)
 {
-    if (mx >= 269 && mx <= 349 && my >= 299 && my <= 379 && sound)
+    if (mx >= 269 && mx <= 349 && my >= 299 && my <= 379)
     {
-        sound = false;
-    }
-    else if (mx >= 269 && mx <= 349 && my >= 299 && my <= 379 && !sound)
-    {
-        sound = true;
+        sound = !sound;
     }
 
-    if (mx >= 277 && mx <= 342 && my >= 217 && my <= 282 && song)
+    if (mx >= 277 && mx <= 342 && my >= 217 && my <= 282)
     {
-        song = false;
+        song = !song;
     }
-    else if (mx >= 277 && mx <= 342 && my >= 217 && my <= 282 && !song)
+
+    // Difficulty selection
+    if (mx >= 280 && mx <= 380 && my >= 140 && my <= 180)
     {
-        song = true;
+        difficulty = 0; // Easy
+    }
+    else if (mx >= 400 && mx <= 500 && my >= 140 && my <= 180)
+    {
+        difficulty = 1; // Medium
+    }
+    else if (mx >= 520 && mx <= 620 && my >= 140 && my <= 180)
+    {
+        difficulty = 2; // Hard
     }
 }
 
 void about()
 {
     iClear();
-    iSetColor(255, 255, 255);
-    iText(screenWidth / 2 - 100, screenHeight / 2, "A small 2d game developed by Imtiaz and Niloy.", GLUT_BITMAP_HELVETICA_18);
+    iShowLoadedImage(0, 0, &aboutim);
+    /* iSetColor(255, 255, 255);
+     iText(screenWidth / 2 - 150, screenHeight / 2, "A small 2D game developed by Imtiaz and Niloy.", GLUT_BITMAP_HELVETICA_18);*/
 }
 
 void help()
 {
     iClear();
-    iSetColor(255, 255, 255);
-    iText(screenWidth / 2 - 100, screenHeight / 2, "Help Screen", GLUT_BITMAP_HELVETICA_18);
+    iShowLoadedImage(0, 0, &helpim);
+    /* iSetColor(255, 255, 255);
+     iText(screenWidth / 2 - 100, screenHeight / 2 + 50, "CONTROLS:", GLUT_BITMAP_HELVETICA_18);
+     iText(screenWidth / 2 - 100, screenHeight / 2 + 20, "Arrow Keys: Move", GLUT_BITMAP_HELVETICA_12);
+     iText(screenWidth / 2 - 100, screenHeight / 2 - 10, "Space: Throw Star", GLUT_BITMAP_HELVETICA_12);
+     iText(screenWidth / 2 - 100, screenHeight / 2 - 40, "S: Switch World", GLUT_BITMAP_HELVETICA_12);
+     iText(screenWidth / 2 - 100, screenHeight / 2 - 70, "R: Restart (Game Over)", GLUT_BITMAP_HELVETICA_12);
+     iText(screenWidth / 2 - 100, screenHeight / 2 - 100, "B: Back to Menu", GLUT_BITMAP_HELVETICA_12);*/
 }
+
 void drawHighScoreBoard()
 {
+    /* iShowLoadedImage(0, 0, &highScoreBg);
+
+     iSetColor(255, 255, 255);
+     iText(400, 550, "Top 10 High Scores", GLUT_BITMAP_HELVETICA_18);
+
+     for (int i = 0; i < numHighScores; i++)
+     {
+         char entry[150];
+         sprintf(entry, "%d. %s - %d", i + 1, highScores[i].name, highScores[i].score);
+         iText(350, 500 - i * 30, entry, GLUT_BITMAP_HELVETICA_18);
+     }*/
+    // Background
     iShowLoadedImage(0, 0, &highScoreBg);
 
-    iSetColor(255, 255, 255);
-    iText(400, 550, "Top 10 High Scores", GLUT_BITMAP_HELVETICA_18);
+    // Title
+    iSetColor(0, 0, 0);
+    iText(362, 552, "TOP 10 HIGH SCORES", GLUT_BITMAP_TIMES_ROMAN_24); // shadow
+    iSetColor(255, 215, 0);
+    iText(360, 550, "TOP 10 HIGH SCORES", GLUT_BITMAP_TIMES_ROMAN_24); // text
 
+    // Entries
     for (int i = 0; i < numHighScores; i++)
     {
         char entry[150];
         sprintf(entry, "%d. %s - %d", i + 1, highScores[i].name, highScores[i].score);
-        iText(350, 500 - i * 30, entry, GLUT_BITMAP_HELVETICA_18);
+
+        // Shadow
+        iSetColor(50, 50, 50);
+        iText(332, 502 - i * 35, entry, GLUT_BITMAP_TIMES_ROMAN_24);
+
+        // Main text
+        iSetColor(255, 255, 255);
+        iText(330, 500 - i * 35, entry, GLUT_BITMAP_TIMES_ROMAN_24);
     }
 }
+
 void drawGameOver()
 {
 
+    iPauseSound(bgsongchannel);
+    iPauseSound(DragonSoundChannel);
     if (!endSoundPlayed)
     {
         insertScore(playerName, playerScore);
-        iPlaySound("saves/assets/sounds/gameover.wav", 0, soundvolume);
+        if (sound)
+        {
+            iStopSound(-1);
+            iPlaySound("saves/assets/sounds/end.wav", 0, soundvolume);
+        }
         endSoundPlayed = true;
         loadHighScores();
     }
-levelTimerRunning = false;
+    levelTimerRunning = false;
     iShowLoadedImage(0, 0, &endImage);
 
     char nameText[100];
@@ -1409,16 +1931,15 @@ levelTimerRunning = false;
     iTextAdvanced(260, 165, scoreText, 0.2, 2, GLUT_STROKE_ROMAN);
 
     iSetColor(255, 255, 255);
-    iText(900, 10, "Press 'R' to Restart", GLUT_BITMAP_HELVETICA_10);
+    iText(900, 50, "Press 'R' to Restart", GLUT_BITMAP_HELVETICA_10);
 }
+
 void drawNameEntry()
 {
     iClear();
     iShowLoadedImage(0, 0, &nameEntryImage);
     iSetColor(255, 255, 255);
-    // iText(300, 350, "Enter Your Name:", GLUT_BITMAP_TIMES_ROMAN_24);
     iText(420, 254, playerName, GLUT_BITMAP_TIMES_ROMAN_24);
-    return;
 }
 
 void iDraw()
@@ -1431,7 +1952,6 @@ void iDraw()
     }
     else if (isPlayButtonClicked)
     {
-
         if (currentScreen == 0)
         {
             drawNavigationBar();
@@ -1444,12 +1964,11 @@ void iDraw()
         {
             start();
             if (!levelTimerRunning)
-    {
-        levelTimerSeconds = 100;
-        levelTimerRunning = true;
-        bossTriggered = false;
-    }
-            
+            {
+                levelTimerSeconds = 180;
+                levelTimerRunning = true;
+                bossTriggered = false;
+            }
         }
         else if (currentScreen == 2)
         {
@@ -1463,27 +1982,29 @@ void iDraw()
         {
             help();
         }
-
         else if (currentScreen == 5)
         {
             drawGameOver();
             levelTimerRunning = false;
-
-
         }
-
         else if (currentScreen == 6)
         {
             drawHighScoreBoard();
         }
+        else if (currentScreen == 7)
+        {
+            drawVictoryScreen();
+        }
     }
 
-    // Optional: if no movement keys pressed, reset moveTimer to avoid animation stuck
+    // Reset moveTimer if no movement
     if (!movingRight && !movingLeft)
     {
         moveTimer = 0;
     }
 }
+
+// FIXED: Complete reset game function
 void resetGame()
 {
     if (endSoundPlayed)
@@ -1491,7 +2012,9 @@ void resetGame()
         iStopSound(collisionSoundChannel);
         iStopSound(bgsongchannel);
     }
-    playerHealth = 5;
+
+    // Reset all game state
+    playerHealth = 10;
     playerScore = 0;
     playerX = 500;
     playerY = 50;
@@ -1502,13 +2025,37 @@ void resetGame()
     hitCooldownTimer = 0;
     endSoundPlayed = false;
     currentScreen = 1;
+
+    // Reset dragon/victory state
+    allDragonsDefeated = false;
+    victoryTriggered = false;
+    victoryTimer = 0;
+    currentDragonIndex = 0;
+    bossTriggered = false;
+    DragonFacingLeft = true;
+    DragonFacingRight = false;
+
+    // Reset enemies
     numGolems = 0;
+    numBarbarians = 0;
     golemSpawnTimer = 0;
+    barbarianSpawnTimer = 0;
     nextGolemX = screenWidth + 300;
+    nextBarbarianX = nextGolemX + 500;
+
+    // Initialize all stars as inactive
+    for (int i = 0; i < MAX_STARS; i++)
+    {
+        stars[i].active = false;
+    }
 
     for (int i = 0; i < MAX_GOLEMS; i++)
     {
         golems[i].active = false;
+    }
+    for (int i = 0; i < MAX_BARBARIANS; i++)
+    {
+        barbarians[i].active = false;
     }
     for (int i = 0; i < NUM_OBSTACLES; i++)
     {
@@ -1516,25 +2063,24 @@ void resetGame()
     }
 
     generateGolems();
+    generateBarbarians();
+    generateObstacles();
     initDragon();
+    initPlatforms(); // FIXED: Reinitialize platforms
+    drawHeart();
+    spawnHeart();
+
     levelTimerSeconds = 180;
-            levelTimerRunning = true;
-            bossTriggered = false;
+    levelTimerRunning = true;
+    // iResumeSound(bgsongchannel);
+    // iResumeSound(DragonSoundChannel);
 }
 
-/*
-function iMouseMove() is called when the user moves the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
 void iMouseMove(int mx, int my)
 {
     // place your codes here
 }
 
-/*
-function iMouseDrag() is called when the user presses and drags the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
 void iMouseDrag(int mx, int my)
 {
     if (currentScreen == 3)
@@ -1543,23 +2089,15 @@ void iMouseDrag(int mx, int my)
         {
             soundknobclicked = true;
             songknobclicked = false;
-            soundknobx = mx - 7;
-            if (soundknobx < 368)
-                soundknobx = 368;
-            if (soundknobx > 639)
-                soundknobx = 639;
-            soundvolume = (soundknobx - 368 + 7) * 50 / (639 - 368);
+            soundknobx = max(368, min(639, mx - 7));
+            soundvolume = (soundknobx - 368 + 7) * 100 / (639 - 368); // FIXED: Volume calculation
         }
         else if (mx >= songknobx && mx <= songknobx + 14 && my >= songknoby && my <= songknoby + 14)
         {
             songknobclicked = true;
             soundknobclicked = false;
-            songknobx = mx - 7;
-            if (songknobx < 368)
-                songknobx = 368;
-            if (songknobx > 639)
-                songknobx = 639;
-            songvolume = (songknobx - 368 + 7) * 50 / (639 - 368);
+            songknobx = max(368, min(639, mx - 7));
+            songvolume = (songknobx - 368 + 7) * 100 / (639 - 368); // FIXED: Volume calculation
         }
         else
         {
@@ -1569,10 +2107,6 @@ void iMouseDrag(int mx, int my)
     }
 }
 
-/*
-function iMouse() is called when the user presses/releases the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
 void iMouse(int button, int state, int mx, int my)
 {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
@@ -1588,7 +2122,7 @@ void iMouse(int button, int state, int mx, int my)
             {
                 isPlayButtonClicked = true;
                 if (sound)
-                {
+                {   
                     iStopSound(-1);
                     iPlaySound("saves/assets/sounds/chime.wav", 0, soundvolume);
                 }
@@ -1611,22 +2145,55 @@ void iMouse(int button, int state, int mx, int my)
         }
     }
 }
+
 void iMouseWheel(int dir, int mx, int my)
 {
     // place your code here
 }
+void throwStar()
+{
+    isthrowingstar = true;
+    for (int i = 0; i < MAX_STARS; i++)
+    {
+        if (!stars[i].active)
+        {
+            stars[i].active = true;
+            stars[i].x = playerX + (starthrowdirection ? playerWidth : 0);
+            stars[i].y = playerY + playerHeight / 2 - 10;
+            if (movingRight)
+            {
+                if (stars[i].directionLeft)
+                {
+                    iMirrorSprite(&throwingStarsprite[i], HORIZONTAL);
+                    stars[i].directionLeft = false;
+                    stars[i].directionRight = true;
+                }
+                iSetSpritePosition(&throwingStarsprite[i], stars[i].x, stars[i].y);
+            }
+            else if (movingLeft)
+            {
+                if (stars[i].directionRight)
+                {
+                    iMirrorSprite(&throwingStarsprite[i], HORIZONTAL);
+                    stars[i].directionRight = false;
+                    stars[i].directionLeft = true;
+                }
+                iSetSpritePosition(&throwingStarsprite[i], stars[i].x, stars[i].y);
+            }
+            break;
+        }
+    }
+}
 
-/*
-function iKeyboard() is called whenever the user hits a key in keyboard.
-key- holds the ASCII value of the key pressed.
-*/
-void iKeyboard(unsigned char key)
+// FIXED: Keyboard input handling
+void iKeyPress(unsigned char key)
 {
     if (enteringName)
     {
         if (key == '\r') // Enter key pressed
         {
             enteringName = false;
+            currentScreen = 1; // Go to game screen
             return;
         }
         else if (key == '\b') // Backspace
@@ -1637,176 +2204,125 @@ void iKeyboard(unsigned char key)
                 playerName[nameCharIndex] = '\0';
             }
         }
-        else if (nameCharIndex < 99)
+        else if (nameCharIndex < 99 && key >= 32 && key <= 126) // FIXED: Only printable characters
         {
             playerName[nameCharIndex++] = key;
             playerName[nameCharIndex] = '\0';
         }
         return;
     }
-    if (key == 's' || key == 'S')
-    {
-        worldSwitched = !worldSwitched; // Toggle world
 
+    switch (key)
+    {
+    case 's':
+    case 'S':
+        worldSwitched = !worldSwitched;
         if (worldSwitched)
         {
-            scrollSpeed = 12; // Increase speed in new world
+            scrollSpeed = 10;
         }
         else
         {
-            scrollSpeed = 10; // Default speed
+            scrollSpeed = 7;
         }
-    }
-    // Add this block for 'b' key to go back to navigation bar
-    if (key == 'b' || key == 'B')
-    {
+        initPlatforms(); // FIXED: Reinitialize platforms when switching worlds
+        break;
+
+    case 'b':
+    case 'B':
         currentScreen = 0;
-        endSoundPlayed = false; // Optional: reset game over sound
-        return;
-    }
+        endSoundPlayed = false;
+        break;
 
-    // Restart game if on game over screen and 'r' is pressed
-    if ((currentScreen == 5) && (key == 'r' || key == 'R'))
-    {
-        resetGame();
-        currentScreen = 1; // Go back to game screen
-        return;
-    }
-
-    switch (key)
-    {
-    case ' ':
-        isthrowingstar = true;
-        for (int i = 0; i < MAX_STARS; i++)
+    case 'r':
+    case 'R':
+        if (currentScreen == 5 || currentScreen == 7) // Game over or victory screen
         {
-            if (!stars[i].active)
-            {
-                stars[i].active = true;
-                stars[i].x = playerX + playerWidth;
-                stars[i].y = playerY + playerHeight / 2 - 10;
-                break; // Add only one star per press
-            }
+            resetGame();
         }
         break;
-    case 'q':
-        // do something with 'q'
+
+    case ' ':
+        if (currentScreen == 1) // Only in game screen
+        {
+
+            if (sound)
+            {
+                iStopSound(-1);
+                iPlaySound("saves/assets/sounds/star.wav", 0, soundvolume);
+            }
+            throwStar();
+        }
         break;
-    // place your codes for other keys here
+
     default:
         break;
     }
 }
 
-/*
-function iSpecialKeyboard() is called whenver user hits special keys likefunction
-keys, home, end, pg up, pg down, arraows etc. you have to use
-appropriate constants to detect them. A list is:
-GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
-GLUT_KEY_F7, GLUT_KEY_F8, GLUT_KEY_F9, GLUT_KEY_F10, GLUT_KEY_F11,
-GLUT_KEY_F12, GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN,
-GLUT_KEY_PAGE_UP, GLUT_KEY_PAGE_DOWN, GLUT_KEY_HOME, GLUT_KEY_END,
-GLUT_KEY_INSERT */
-void iSpecialKeyboard(unsigned char key)
+bool ninjaFacingRight = true;
+
+void iSpecialKeyPress(unsigned char key)
 {
     switch (key)
     {
-    case GLUT_KEY_HOME:
-        currentScreen = 0; // do something
-        break;
-    // place your codes for other keys here
-    default:
-        break;
-    }
-    if (key == GLUT_KEY_LEFT)
-    {
+    case GLUT_KEY_LEFT:
         starthrowdirection = false;
-        if (playerX > 10)
-        {
-            if (movingRight)
-            {
-                iMirrorSprite(&playerSprite, HORIZONTAL);
-                iMirrorSprite(&starthrow, HORIZONTAL);
-            }
-            movingLeft = true;
-            movingRight = false;
-            moveTimer = 0;
-            moving = true;
 
-            if (!isJumping)
-            {
-                if (worldX > -490)
-                {
-                    worldX -= 5;
-                }
-                if (worldX > 0 && worldX < worldWidth - 1000)
-                {
-                    iWrapImage(&bg, 5);
-                }
-                else if ((worldX <= 0 && worldX >= -490) || (worldX >= worldWidth - 1000 && worldX <= worldWidth - 10))
-                {
-                    playerX -= 5;
-                }
-                else
-                {
-                    playerX += 0;
-                }
-            }
+        if (movingRight)
+        {
+            iMirrorSprite(&playerSprite, HORIZONTAL);
+            iMirrorSprite(&starthrow, HORIZONTAL);
         }
-    }
-    else if (key == GLUT_KEY_RIGHT)
-    {
+
+        movingLeft = true;
+        movingRight = false;
+        moving = true;
+
+        break;
+
+    case GLUT_KEY_RIGHT:
         starthrowdirection = true;
-        if (playerX < screenWidth - playerWidth - 10)
+
+        if (movingLeft)
         {
-            if (movingLeft)
-            {
-                iMirrorSprite(&playerSprite, HORIZONTAL);
-                iMirrorSprite(&starthrow, HORIZONTAL);
-            }
-
-            movingRight = true;
-            movingLeft = false;
-            moveTimer = 0;
-            moving = true;
-
-            if (!isJumping)
-            {
-                if (worldX < worldWidth - 10)
-                {
-                    worldX += 5;
-                }
-                if (worldX > 0 && worldX < worldWidth - 1000)
-                {
-                    iWrapImage(&bg, -5);
-                }
-                else if ((worldX <= 0 && worldX >= -490) || (worldX >= worldWidth - 1000 && worldX <= worldWidth - 10))
-                {
-                    playerX += 5;
-                }
-                else
-                {
-                    playerX += 0;
-                }
-            }
+            iMirrorSprite(&playerSprite, HORIZONTAL);
+            iMirrorSprite(&starthrow, HORIZONTAL);
         }
-    }
-    if (key == GLUT_KEY_UP)
-    {
-        if (!isJumping)
+
+        movingRight = true;
+        movingLeft = false;
+        moving = true;
+
+        break;
+
+    case GLUT_KEY_UP:
+
+        if (!isJumping && onLand)
         {
             isJumping = true;
             verticalSpeed = jumpSpeed;
+            onLand = false;
         }
-    }
-    else if (key == GLUT_KEY_DOWN)
-    {
-        // do something for down key
+        break;
+
+    case GLUT_KEY_HOME:
+        currentScreen = 0;
+        break;
+
+    default:
+        break;
     }
 }
-void SpecialKeyboardUP()
+
+// FIXED: Key release detection
+void iSpecialKeyRelease(unsigned char key)
 {
-    moveTimer++;
-    if (moveTimer >= MOVE_INTERVAL)
+    if (key == GLUT_KEY_LEFT)
+    {
+        moving = false;
+    }
+    else if (key == GLUT_KEY_RIGHT)
     {
         moving = false;
     }
@@ -1822,6 +2338,7 @@ void initLeaves()
         leaves[i].active = true;
     }
 }
+
 void hitCoolDown()
 {
     if (hitCooldown)
@@ -1834,55 +2351,105 @@ void hitCoolDown()
         }
     }
 }
+
 void playerScores()
 {
     if (currentScreen == 1 && playerHealth > 0)
     {
-        // playerScore++;
+        // Additional scoring logic can go here
     }
 }
 
-void iTimer()
+void iTimer1()
 {
-    updateLeaves();
-    hitCoolDown();
-    updatePlayer();
-    updatestar();
-    updateBarbarians();
-    checkBarbarianCollision();
-    checkStarBarbarianCollision();
-    checkStarGolemCollision();
-    checkGolemCollision();
-    updateDragonAttack();
-    updateDragonPosition();
-    checkDragonFireCollision();
-    checkStarDragonCollision();
-    checkPlayerDragonCollision();
-    playBGSong();
-    SpecialKeyboardUP();
-}
+    if (currentScreen == 1) // Only update game logic when in game screen
+    {
+        // checkKeyReleases();
+        updateLeaves();
+        updateHeart();
+        checkHeartCollision();
+        spawnHeart();
+        hitCoolDown();
+        updatestar();
 
+        checkBarbarianCollision();
+        checkStarBarbarianCollision();
+        checkStarGolemCollision();
+        checkGolemCollision();
+        updateDragonAttack();
+        updateDragonPosition();
+        checkDragonFireCollision();
+        checkStarDragonCollision();
+        checkPlayerDragonCollision();
+        updateVictoryState();
+        checkObstacleCollision();
+        // iSetTimer(25, updateHeart); // MUST EXIST
+    }
+    playBGSong(); // Always handle background music
+}
+void iTimer2()
+{
+    if (currentScreen == 1)
+    {
+        animategolem();
+        animatePlayer();
+        animatestarthrow();
+        animateBarbarian();
+        animateDragon();
+        updatePlayerPosition();
+    }
+}
+void iTimer3()
+{
+    if (currentScreen == 1)
+    {
+        updateGolems();
+        updatePlayer();
+        updatePlayerPosition();
+        updateBarbarians();
+    }
+}
+// FIXED: Main function
 int main(int argc, char *argv[])
 {
     glutInit(&argc, argv);
-    // place your own initialization codes here.
+
+    // Initialize all arrays to prevent garbage values
+    for (int i = 0; i < MAX_STARS; i++)
+    {
+        stars[i].active = false;
+        stars[i].x = 0;
+        stars[i].y = 0;
+    }
+
+    for (int i = 0; i < MAX_GOLEMS; i++)
+    {
+        golems[i].active = false;
+    }
+
+    for (int i = 0; i < MAX_BARBARIANS; i++)
+    {
+        barbarians[i].active = false;
+    }
     load_Images();
     generateObstacles();
     generateGolems();
+    generateBarbarians();
     loadHighScores();
     initLeaves();
+    spawnHeart();
     initDragon();
-    iSetTimer(30, playerScores);
-    iSetTimer(100, updateGolems);
-    iSetTimer(80, animategolem);
-    iSetTimer(120, animatePlayer);
-    iSetTimer(60, animatestarthrow);
-    iSetTimer(20, iTimer);
-    iSetTimer(120, spawnBarbarianIfNeeded);
-    iSetTimer(120, animateBarbarian);
-    iSetTimer(120, animateDragon);
-    iSetTimer(1000, updateLevelCountdown);
+    initPlatforms();
 
+    iSetTimer(30, playerScores);
+    iSetTimer(16, iTimer1);
+    iSetTimer(100, iTimer2);
+    iSetTimer(30, iTimer3);
+    iSetTimer(20000, spawnHeart);
+    iSetTimer(1000, updateLevelCountdown);
+    iSetTimer(16, updateVictoryState);
+    // 20 seconds = 20000 ms
+    // iSetTimer(25, updateHeart); // MUST EXIST
     iInitializeSound();
     playBGSong();
     iInitialize(screenWidth, screenHeight, "Maze of Shadows");
